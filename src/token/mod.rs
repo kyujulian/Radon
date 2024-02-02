@@ -53,32 +53,63 @@ impl PartialEq for TokenType {
 
 pub struct Token {
     token_type: TokenType,
-    literal: String,
 }
 
 impl From<char> for Token {
     fn from(ch: char) -> Token {
         match ch {
-            ';' => Token::new(TokenType::SEMICOLON, ';'.to_string()),
-            '=' => Token::new(TokenType::ASSIGN, '='.to_string()),
-            '(' => Token::new(TokenType::LPAREN, '('.to_string()),
-            ')' => Token::new(TokenType::RPAREN, ')'.to_string()),
-            '+' => Token::new(TokenType::PLUS, '+'.to_string()),
-            '-' => Token::new(TokenType::MINUS, '-'.to_string()),
-            ',' => Token::new(TokenType::COMMA, ','.to_string()),
-            '}' => Token::new(TokenType::RBRACE, '}'.to_string()),
-            '{' => Token::new(TokenType::LBRACE, '{'.to_string()),
-            '\0' => Token::new(TokenType::EOF, "".to_string()),
-            _ => Token::new(TokenType::ILLEGAL, "".to_string()),
+            ';' => Token::new(TokenType::SEMICOLON),
+            '=' => Token::new(TokenType::ASSIGN),
+            '(' => Token::new(TokenType::LPAREN),
+            ')' => Token::new(TokenType::RPAREN),
+            '+' => Token::new(TokenType::PLUS),
+            '-' => Token::new(TokenType::MINUS),
+            ',' => Token::new(TokenType::COMMA),
+            '}' => Token::new(TokenType::RBRACE),
+            '{' => Token::new(TokenType::LBRACE),
+            '\0' => Token::new(TokenType::EOF),
+            _ => Token::new(TokenType::ILLEGAL),
         }
     }
 }
 
 impl Token {
-    fn new(token_type: TokenType, literal: String) -> Token {
-        Token {
-            token_type,
-            literal,
+    fn new(token_type: TokenType) -> Token {
+        Token { token_type }
+    }
+
+    fn as_char(&self) -> char {
+        match self.token_type {
+            TokenType::ASSIGN => '=',
+            TokenType::PLUS => '+',
+            TokenType::COMMA => ',',
+            TokenType::SEMICOLON => ';',
+            TokenType::LPAREN => '(',
+            TokenType::RPAREN => ')',
+            TokenType::LBRACE => '{',
+            TokenType::RBRACE => '}',
+            TokenType::EOF => '\0',
+            _ => '\0',
+        }
+    }
+
+    fn as_str(&self) -> &'static str {
+        match self.token_type {
+            TokenType::ILLEGAL => "ILLEGAL",
+            TokenType::EOF => "EOF",
+            TokenType::IDENT => "IDENT",
+            TokenType::INT => "INT",
+            TokenType::ASSIGN => "=",
+            TokenType::MINUS => "-",
+            TokenType::PLUS => "+",
+            TokenType::COMMA => ",",
+            TokenType::SEMICOLON => ";",
+            TokenType::LPAREN => "(",
+            TokenType::RPAREN => ")",
+            TokenType::LBRACE => "{",
+            TokenType::RBRACE => "}",
+            TokenType::FUNCTION => "FUNCTION",
+            TokenType::LET => "LET",
         }
     }
 }
@@ -92,15 +123,15 @@ mod tests {
         let input = "=+(){},;";
 
         let tests: Vec<Token> = vec![
-            Token::new(TokenType::ASSIGN, "=".to_string()),
-            Token::new(TokenType::PLUS, "+".to_string()),
-            Token::new(TokenType::LPAREN, "(".to_string()),
-            Token::new(TokenType::RPAREN, ")".to_string()),
-            Token::new(TokenType::LBRACE, "{".to_string()),
-            Token::new(TokenType::RBRACE, "}".to_string()),
-            Token::new(TokenType::COMMA, ",".to_string()),
-            Token::new(TokenType::SEMICOLON, ";".to_string()),
-            Token::new(TokenType::EOF, "".to_string()),
+            Token::new(TokenType::ASSIGN),
+            Token::new(TokenType::PLUS),
+            Token::new(TokenType::LPAREN),
+            Token::new(TokenType::RPAREN),
+            Token::new(TokenType::LBRACE),
+            Token::new(TokenType::RBRACE),
+            Token::new(TokenType::COMMA),
+            Token::new(TokenType::SEMICOLON),
+            Token::new(TokenType::EOF),
         ];
 
         let mut l = lexer::Lexer::new(input.to_string());
@@ -112,12 +143,6 @@ mod tests {
                 tok.token_type, tt.token_type,
                 "expected token type {:?}, got {:?}",
                 tt.token_type, tok.token_type
-            );
-
-            assert_eq!(
-                tok.literal, tt.literal,
-                "expected literal {:?}, got {:?}",
-                tt.literal, tok.literal
             );
         }
     }
