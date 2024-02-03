@@ -1,4 +1,4 @@
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum TokenType {
     ILLEGAL,
     EOF,
@@ -30,34 +30,11 @@ pub enum TokenType {
     // Keywords
     FUNCTION,
     LET,
-}
-
-impl PartialEq for TokenType {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (TokenType::ILLEGAL, TokenType::ILLEGAL) => true,
-            (TokenType::EOF, TokenType::EOF) => true,
-            (TokenType::IDENT, TokenType::IDENT) => true,
-            (TokenType::INT, TokenType::INT) => true,
-            (TokenType::ASSIGN, TokenType::ASSIGN) => true,
-            (TokenType::MINUS, TokenType::MINUS) => true,
-            (TokenType::PLUS, TokenType::PLUS) => true,
-            (TokenType::COMMA, TokenType::COMMA) => true,
-            (TokenType::SEMICOLON, TokenType::SEMICOLON) => true,
-            (TokenType::LPAREN, TokenType::LPAREN) => true,
-            (TokenType::RPAREN, TokenType::RPAREN) => true,
-            (TokenType::LBRACE, TokenType::LBRACE) => true,
-            (TokenType::RBRACE, TokenType::RBRACE) => true,
-            (TokenType::FUNCTION, TokenType::FUNCTION) => true,
-            (TokenType::LET, TokenType::LET) => true,
-            (TokenType::BANG, TokenType::BANG) => true,
-            (TokenType::ASTERISK, TokenType::ASTERISK) => true,
-            (TokenType::SLASH, TokenType::SLASH) => true,
-            (TokenType::LT, TokenType::LT) => true,
-            (TokenType::GT, TokenType::GT) => true,
-            _ => false,
-        }
-    }
+    IF,
+    ELSE,
+    TRUE,
+    FALSE,
+    RETURN,
 }
 
 #[derive(Debug)]
@@ -102,6 +79,11 @@ impl From<&str> for Token {
         match ident {
             "fn" => Token::new(TokenType::FUNCTION, "fn".to_string()),
             "let" => Token::new(TokenType::LET, "let".to_string()),
+            "true" => Token::new(TokenType::TRUE, "true".to_string()),
+            "false" => Token::new(TokenType::FALSE, "false".to_string()),
+            "if" => Token::new(TokenType::IF, "if".to_string()),
+            "else" => Token::new(TokenType::ELSE, "else".to_string()),
+            "return" => Token::new(TokenType::RETURN, "return".to_string()),
             _ => Token::new(TokenType::IDENT, ident.to_string()),
         }
     }

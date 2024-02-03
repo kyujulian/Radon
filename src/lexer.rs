@@ -118,6 +118,12 @@ mod tests {
 
         !-/*5;
         5 < 10 > 5;
+        
+        if (5 < 10) {
+            return true;
+        }   else {
+            return false;
+        }
         "
         .to_string();
 
@@ -170,6 +176,23 @@ mod tests {
             Token::from('>'),
             Token::from('5'),
             Token::from(';'),
+            Token::from("if"),
+            Token::from('('),
+            Token::from('5'),
+            Token::from('<'),
+            Token::new(TokenType::INT, "10".to_string()),
+            Token::from(')'),
+            Token::from('{'),
+            Token::from("return"),
+            Token::from("true"),
+            Token::from(';'),
+            Token::from('}'),
+            Token::from("else"),
+            Token::from('{'),
+            Token::from("return"),
+            Token::from("false"),
+            Token::from(';'),
+            Token::from('}'),
             Token::new(TokenType::EOF, "".to_string()),
         ];
 
