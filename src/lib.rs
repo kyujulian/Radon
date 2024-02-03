@@ -1,3 +1,4 @@
+pub mod lexer;
 pub mod token;
 
 pub fn add(left: usize, right: usize) -> usize {
