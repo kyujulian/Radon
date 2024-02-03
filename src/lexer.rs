@@ -62,7 +62,23 @@ impl Lexer {
         self.skip_whitespace();
         let tok = match self.ch {
             ';' => Token::from(';'),
-            '=' => Token::from('='),
+            '=' => {
+                if self.peek_char() == '=' {
+                    self.read_char();
+                    Token::from("==")
+                } else {
+                    Token::from('=')
+                }
+            }
+            '!' => {
+                if self.peek_char() == '=' {
+                    self.read_char();
+                    Token::from("!=")
+                } else {
+                    Token::from('!')
+                }
+            }
+
             '(' => Token::from('('),
             ')' => Token::from(')'),
             ',' => Token::from(','),
@@ -71,7 +87,6 @@ impl Lexer {
 
             '+' => Token::from('+'),
             '-' => Token::from('-'),
-            '!' => Token::from('!'),
             '*' => Token::from('*'),
             '/' => Token::from('/'),
             '<' => Token::from('<'),
@@ -102,6 +117,14 @@ impl Lexer {
     fn is_letter(ch: char) -> bool {
         ch.is_alphabetic() || ch == '_'
     }
+
+    fn peek_char(&self) -> char {
+        if self.read_position >= self.input.len() {
+            '\0'
+        } else {
+            self.input.as_bytes()[self.read_position] as char
+        }
+    }
 }
 
 #[cfg(test)]
@@ -124,6 +147,9 @@ mod tests {
         }   else {
             return false;
         }
+
+        10 == 10;
+        8 != 9;
         "
         .to_string();
 
@@ -193,6 +219,14 @@ mod tests {
             Token::from("false"),
             Token::from(';'),
             Token::from('}'),
+            Token::new(TokenType::INT, "10".to_string()),
+            Token::from("=="),
+            Token::new(TokenType::INT, "10".to_string()),
+            Token::from(';'),
+            Token::from('8'),
+            Token::from("!="),
+            Token::from('9'),
+            Token::from(';'),
             Token::new(TokenType::EOF, "".to_string()),
         ];
 

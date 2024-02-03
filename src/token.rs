@@ -18,6 +18,9 @@ pub enum TokenType {
     LT,
     GT,
 
+    NEQ,
+    EQ,
+
     // Delimiters
     COMMA,
     SEMICOLON,
@@ -84,6 +87,9 @@ impl From<&str> for Token {
             "if" => Token::new(TokenType::IF, "if".to_string()),
             "else" => Token::new(TokenType::ELSE, "else".to_string()),
             "return" => Token::new(TokenType::RETURN, "return".to_string()),
+
+            "!=" => Token::new(TokenType::NEQ, "!=".to_string()),
+            "==" => Token::new(TokenType::EQ, "==".to_string()),
             _ => Token::new(TokenType::IDENT, ident.to_string()),
         }
     }
