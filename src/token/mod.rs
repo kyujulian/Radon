@@ -53,29 +53,33 @@ impl PartialEq for TokenType {
 
 pub struct Token {
     token_type: TokenType,
+    literal: String,
 }
 
 impl From<char> for Token {
     fn from(ch: char) -> Token {
         match ch {
-            ';' => Token::new(TokenType::SEMICOLON),
-            '=' => Token::new(TokenType::ASSIGN),
-            '(' => Token::new(TokenType::LPAREN),
-            ')' => Token::new(TokenType::RPAREN),
-            '+' => Token::new(TokenType::PLUS),
-            '-' => Token::new(TokenType::MINUS),
-            ',' => Token::new(TokenType::COMMA),
-            '}' => Token::new(TokenType::RBRACE),
-            '{' => Token::new(TokenType::LBRACE),
-            '\0' => Token::new(TokenType::EOF),
-            _ => Token::new(TokenType::ILLEGAL),
+            ';' => Token::new(TokenType::SEMICOLON, ";".to_string()),
+            '=' => Token::new(TokenType::ASSIGN, "=".to_string()),
+            '(' => Token::new(TokenType::LPAREN, "(".to_string()),
+            ')' => Token::new(TokenType::RPAREN, ")".to_string()),
+            '+' => Token::new(TokenType::PLUS, "+".to_string()),
+            '-' => Token::new(TokenType::MINUS, "-".to_string()),
+            ',' => Token::new(TokenType::COMMA, ",".to_string()),
+            '}' => Token::new(TokenType::RBRACE, "}".to_string()),
+            '{' => Token::new(TokenType::LBRACE, "{".to_string()),
+            '\0' => Token::new(TokenType::EOF, "".to_string()),
+            _ => Token::new(TokenType::ILLEGAL, "".to_string()),
         }
     }
 }
 
 impl Token {
-    fn new(token_type: TokenType) -> Token {
-        Token { token_type }
+    fn new(token_type: TokenType, literal: String) -> Token {
+        Token {
+            token_type,
+            literal,
+        }
     }
 
     fn as_char(&self) -> char {
@@ -123,15 +127,15 @@ mod tests {
         let input = "=+(){},;";
 
         let tests: Vec<Token> = vec![
-            Token::new(TokenType::ASSIGN),
-            Token::new(TokenType::PLUS),
-            Token::new(TokenType::LPAREN),
-            Token::new(TokenType::RPAREN),
-            Token::new(TokenType::LBRACE),
-            Token::new(TokenType::RBRACE),
-            Token::new(TokenType::COMMA),
-            Token::new(TokenType::SEMICOLON),
-            Token::new(TokenType::EOF),
+            Token::new(TokenType::ASSIGN, "=".to_string()),
+            Token::new(TokenType::PLUS, "+".to_string()),
+            Token::new(TokenType::LPAREN, "(".to_string()),
+            Token::new(TokenType::RPAREN, ")".to_string()),
+            Token::new(TokenType::LBRACE, "{".to_string()),
+            Token::new(TokenType::RBRACE, "}".to_string()),
+            Token::new(TokenType::COMMA, ",".to_string()),
+            Token::new(TokenType::SEMICOLON, ";".to_string()),
+            Token::new(TokenType::EOF, "".to_string()),
         ];
 
         let mut l = lexer::Lexer::new(input.to_string());
@@ -144,6 +148,64 @@ mod tests {
                 "expected token type {:?}, got {:?}",
                 tt.token_type, tok.token_type
             );
+
+            assert_eq!(
+                tok.literal, tt.literal,
+                "expected token type {:?}, got {:?}",
+                tt.token_type, tok.token_type
+            );
         }
+    }
+
+    #[test]
+    fn test_next_token_2() {
+        let input = "let five = 5;
+        let ten = 10;
+        let add = fn(x, y) {
+            x + y;
+        };
+        let result = add(five, ten);
+        "
+        .to_string();
+
+        let tests: Vec<Token> = vec![
+            Token::new(TokenType::LET, "let".to_string()),
+            Token::new(TokenType::IDENT, "five".to_string()),
+            Token::new(TokenType::ASSIGN, "=".to_string()),
+            Token::new(TokenType::INT, "5".to_string()),
+            Token::new(TokenType::SEMICOLON, ";".to_string()),
+            Token::new(TokenType::LET, "let".to_string()),
+            Token::new(TokenType::IDENT, "ten".to_string()),
+            Token::new(TokenType::ASSIGN, "=".to_string()),
+            Token::new(TokenType::INT, "10".to_string()),
+            Token::new(TokenType::SEMICOLON, ";".to_string()),
+            Token::new(TokenType::LET, "let".to_string()),
+            Token::new(TokenType::IDENT, "add".to_string()),
+            Token::new(TokenType::ASSIGN, "=".to_string()),
+            Token::new(TokenType::FUNCTION, "fn".to_string()),
+            Token::new(TokenType::LPAREN, "(".to_string()),
+            Token::new(TokenType::IDENT, "x".to_string()),
+            Token::new(TokenType::COMMA, ",".to_string()),
+            Token::new(TokenType::IDENT, "y".to_string()),
+            Token::new(TokenType::RPAREN, ")".to_string()),
+            Token::new(TokenType::LBRACE, "{".to_string()),
+            Token::new(TokenType::IDENT, "x".to_string()),
+            Token::new(TokenType::PLUS, "+".to_string()),
+            Token::new(TokenType::IDENT, "y".to_string()),
+            Token::new(TokenType::SEMICOLON, ";".to_string()),
+            Token::new(TokenType::RBRACE, "}".to_string()),
+            Token::new(TokenType::SEMICOLON, ";".to_string()),
+            Token::new(TokenType::LET, "let".to_string()),
+            Token::new(TokenType::IDENT, "result".to_string()),
+            Token::new(TokenType::ASSIGN, "=".to_string()),
+            Token::new(TokenType::IDENT, "add".to_string()),
+            Token::new(TokenType::LPAREN, "(".to_string()),
+            Token::new(TokenType::IDENT, "five".to_string()),
+            Token::new(TokenType::COMMA, ",".to_string()),
+            Token::new(TokenType::IDENT, "ten".to_string()),
+            Token::new(TokenType::RPAREN, ")".to_string()),
+            Token::new(TokenType::SEMICOLON, ";".to_string()),
+            Token::new(TokenType::EOF, "".to_string()),
+        ];
     }
 }
