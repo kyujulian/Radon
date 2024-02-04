@@ -102,9 +102,18 @@ impl LetStatement {
 
 pub struct ReturnStatement {
     token: Token, // return token
-    // need to be wrapped in a box because the compiler isn't
-    // capable of figuring out the size of a `dyn Expression` in compile time
-    return_value: Box<dyn Expression>,
+
+                  // need to be wrapped in a box because the compiler isn't
+                  // capable of figuring out the size of a `dyn Expression` in compile time
+                  // return_value: Box<dyn Expression>,
+}
+
+impl ReturnStatement {
+    pub fn new() -> Self {
+        Self {
+            token: Token::from("return"),
+        }
+    }
 }
 
 impl Node for ReturnStatement {

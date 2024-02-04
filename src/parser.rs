@@ -45,8 +45,19 @@ impl Parser {
     pub fn parse_statement(&mut self) -> Option<Box<dyn ast::Statement>> {
         match self.cur_token.token_type {
             token::TokenType::LET => self.parse_let_statement(),
+            token::TokenType::RETURN => self.parse_return_statement(),
             _ => None,
         }
+    }
+
+    pub fn parse_return_statement(&mut self) -> Option<Box<dyn ast::Statement>> {
+        let mut stmt = ast::ReturnStatement::new();
+        self.next_token();
+        // TODO: We're skipping the expression, looping until we encounter a semicolon
+        while !self.cur_token_is(token::TokenType::SEMICOLON) {
+            self.next_token();
+        }
+        return Some(Box::new(stmt));
     }
 
     pub fn parse_let_statement(&mut self) -> Option<Box<dyn ast::Statement>> {
