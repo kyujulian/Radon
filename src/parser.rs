@@ -26,8 +26,58 @@ impl Parser {
         self.peek_token = self.lex.next_token();
     }
 
-    pub fn parse_program(&self) -> Option<Box<ast::Program>> {
-        todo!()
+    pub fn parse_statement(&mut self) -> Option<Box<dyn ast::Statement>> {
+        match self.cur_token.token_type {
+            token::TokenType::LET => self.parse_let_statement(),
+            _ => None,
+        }
+    }
+
+    pub fn parse_let_statement(&mut self) -> Option<Box<dyn ast::Statement>> {
+        let mut stmt = ast::LetStatement::new();
+
+        if !self.expect_peek(token::TokenType::IDENT) {
+            return None;
+        }
+
+        stmt.name = ast::Identifier::new(self.cur_token.clone(), self.cur_token.literal.clone());
+
+        if !self.expect_peek(token::TokenType::ASSIGN) {
+            return None;
+        }
+
+        //TODO: We're skipping the expressions until we encounter a semicolon
+        while !self.cur_token_is(token::TokenType::SEMICOLON) {
+            self.next_token();
+        }
+
+        return Some(Box::new(stmt));
+    }
+
+    pub fn cur_token_is(&self, t: token::TokenType) -> bool {
+        self.cur_token.token_type == t
+    }
+
+    pub fn expect_peek(&mut self, t: token::TokenType) -> bool {
+        if self.peek_token.token_type == t {
+            self.next_token();
+            true
+        } else {
+            false
+        }
+    }
+    pub fn parse_program(&mut self) -> Option<Box<ast::Program>> {
+        let mut program = ast::Program::new();
+        program.statements = vec![];
+
+        while self.cur_token.token_type != token::TokenType::EOF {
+            if let Some(stmt) = self.parse_statement() {
+                program.statements.push(stmt);
+            }
+            self.next_token()
+        }
+
+        return Some(Box::new(program));
     }
 }
 
@@ -58,7 +108,7 @@ mod tests {
         ";
 
         let lex = lexer::Lexer::new(input.to_string());
-        let parser = Parser::new(lex);
+        let mut parser = Parser::new(lex);
 
         let program = match parser.parse_program() {
             None => panic!("None from parse_program()"),
@@ -82,6 +132,7 @@ mod tests {
 
         let has_invalid_tests = tests.iter().enumerate().any(|(i, test)| {
             let stmt = &program.statements[i];
+            println!("stmt type {:?}", stmt.token_literal());
             !test_let_statement(stmt, &test.expected_identifier)
         });
 

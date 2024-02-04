@@ -1,4 +1,4 @@
-use crate::token::Token;
+use crate::token::{Token, TokenType};
 
 use std::any::Any;
 
@@ -20,6 +20,14 @@ pub struct Program {
     pub statements: Vec<Box<dyn Statement>>, // Dynamic dispatch (?)
 }
 
+impl Program {
+    pub fn new() -> Self {
+        Program {
+            statements: Vec::new(),
+        }
+    }
+}
+
 impl Node for Program {
     fn token_literal(&self) -> String {
         if self.statements.len() > 0 {
@@ -34,6 +42,12 @@ impl Node for Program {
 pub struct Identifier {
     pub token: Token,
     pub value: String,
+}
+
+impl Identifier {
+    pub fn new(token: Token, value: String) -> Self {
+        Identifier { token, value }
+    }
 }
 impl Node for Identifier {
     fn token_literal(&self) -> String {
@@ -50,6 +64,17 @@ pub struct LetStatement {
     pub name: Identifier,
 }
 
+impl LetStatement {
+    pub fn new() -> Self {
+        LetStatement {
+            token: Token::new(TokenType::LET, "let".to_string()),
+            name: Identifier {
+                token: Token::new(TokenType::ILLEGAL, "".to_string()),
+                value: "".to_string(),
+            },
+        }
+    }
+}
 impl Node for LetStatement {
     fn token_literal(&self) -> String {
         return self.token.literal.clone();
