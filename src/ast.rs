@@ -2,6 +2,7 @@ use crate::token::{Token, TokenType};
 
 use std::any::Any;
 
+// Traits
 pub trait Node {
     fn token_literal(&self) -> String;
 }
@@ -16,6 +17,7 @@ pub trait Expression: Node {
     fn expression_node(&self);
 }
 
+// PROGRAM
 pub struct Program {
     pub statements: Vec<Box<dyn Statement>>, // Dynamic dispatch (?)
 }
@@ -38,6 +40,8 @@ impl Node for Program {
     }
 }
 
+// IDENTIFIER
+
 #[derive(Debug, PartialEq)]
 pub struct Identifier {
     pub token: Token,
@@ -58,6 +62,7 @@ impl Expression for Identifier {
     fn expression_node(&self) {}
 }
 
+// LET STATEMENT
 #[derive(Debug, PartialEq)]
 pub struct LetStatement {
     pub token: Token,
@@ -65,6 +70,8 @@ pub struct LetStatement {
 }
 
 impl LetStatement {
+    ///Creates a new name
+    ///Initializes name to TokenType::ILLEGAL
     pub fn new() -> Self {
         LetStatement {
             token: Token::new(TokenType::LET, "let".to_string()),

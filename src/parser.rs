@@ -6,6 +6,7 @@ pub struct Parser {
     lex: lexer::Lexer,
     cur_token: token::Token,
     peek_token: token::Token,
+    errors: Vec<String>,
 }
 
 impl Parser {
@@ -14,11 +15,26 @@ impl Parser {
             lex,
             cur_token: token::Token::from('\0'),
             peek_token: token::Token::from('\0'),
+            errors: Vec::new(),
         };
 
         p.next_token();
         p.next_token();
         p
+    }
+
+    /// Returns a read-only view (slice) of the errors
+    pub fn get_errors(&self) -> &[String] {
+        self.errors.as_slice()
+    }
+
+    pub fn peek_error(&mut self, token: token::TokenType) {
+        let msg = format!(
+            "Expected next token to be of type {:?}, got {:?} instead",
+            token, self.peek_token.token_type
+        );
+
+        self.errors.push(msg);
     }
 
     pub fn next_token(&mut self) {
@@ -63,9 +79,11 @@ impl Parser {
             self.next_token();
             true
         } else {
+            self.peek_error(t);
             false
         }
     }
+
     pub fn parse_program(&mut self) -> Option<Box<ast::Program>> {
         let mut program = ast::Program::new();
         program.statements = vec![];
@@ -109,6 +127,8 @@ mod tests {
 
         let lex = lexer::Lexer::new(input.to_string());
         let mut parser = Parser::new(lex);
+
+        check_parser_errors(&parser);
 
         let program = match parser.parse_program() {
             None => panic!("None from parse_program()"),
@@ -171,5 +191,21 @@ mod tests {
         };
 
         true
+    }
+
+    fn check_parser_errors(parser: &Parser) {
+        let errors = parser.get_errors();
+
+        if errors.len() == 0 {
+            return;
+        }
+
+        println!("Parser has {} Errors: ", errors.len());
+
+        for msg in errors {
+            println!("Parser error: {}", msg);
+        }
+
+        panic!();
     }
 }
