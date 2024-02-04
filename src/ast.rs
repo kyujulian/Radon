@@ -99,3 +99,24 @@ impl LetStatement {
         s.as_any().downcast_ref::<LetStatement>()
     }
 }
+
+pub struct ReturnStatement {
+    token: Token, // return token
+    // need to be wrapped in a box because the compiler isn't
+    // capable of figuring out the size of a `dyn Expression` in compile time
+    return_value: Box<dyn Expression>,
+}
+
+impl Node for ReturnStatement {
+    fn token_literal(&self) -> String {
+        return self.token.literal.clone();
+    }
+}
+
+impl Statement for ReturnStatement {
+    fn statement_node(&self) {}
+
+    fn as_any(&self) -> &dyn Any {
+        return self;
+    }
+}

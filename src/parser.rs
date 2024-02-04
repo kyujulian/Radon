@@ -24,7 +24,7 @@ impl Parser {
     }
 
     /// Returns a read-only view (slice) of the errors
-    pub fn get_errors(&self) -> &[String] {
+    pub fn errors(&self) -> &[String] {
         self.errors.as_slice()
     }
 
@@ -101,7 +101,7 @@ impl Parser {
 
 #[cfg(test)]
 mod tests {
-    use crate::ast::LetStatement;
+    use crate::ast::{LetStatement, ReturnStatement};
 
     use super::*;
 
@@ -128,19 +128,11 @@ mod tests {
         let lex = lexer::Lexer::new(input.to_string());
         let mut parser = Parser::new(lex);
 
-        check_parser_errors(&parser);
-
         let program = match parser.parse_program() {
             None => panic!("None from parse_program()"),
             Some(p) => {
-                if p.statements.len() != 3 {
-                    panic!(
-                        "Program.statements does not contain 3 statements, got={}",
-                        p.statements.len()
-                    );
-                } else {
-                    p
-                }
+                check_parser_errors(&parser);
+                p
             }
         };
 
@@ -194,7 +186,7 @@ mod tests {
     }
 
     fn check_parser_errors(parser: &Parser) {
-        let errors = parser.get_errors();
+        let errors = parser.errors();
 
         if errors.len() == 0 {
             return;
@@ -207,5 +199,53 @@ mod tests {
         }
 
         panic!();
+    }
+
+    // RETURN STATEMENTS
+    #[test]
+    fn test_return_statement() {
+        let input = "
+            return 5;
+            return 10;
+            return 993322;
+        ";
+
+        let mut lex = lexer::Lexer::new(input.to_string());
+
+        let mut parser = Parser::new(lex);
+
+        let program = match parser.parse_program() {
+            None => panic!("None from parse_program()"),
+            Some(p) => {
+                check_parser_errors(&parser);
+                p
+            }
+        };
+
+        if program.statements.len() != 3 {
+            panic!(
+                "Program statements does not contain 3 statements, got {}",
+                program.statements.len()
+            );
+        }
+
+        for stmt in program.statements {
+            match stmt.as_any().downcast_ref::<ReturnStatement>() {
+                None => {
+                    panic!(
+                        "Got none from downcast_ref from  -> {:?}",
+                        stmt.token_literal()
+                    );
+                }
+                Some(st) => {
+                    if st.token_literal() != "return" {
+                        panic!(
+                            "Token Literal not corresponding to a return statement, got {:?}",
+                            stmt.token_literal()
+                        );
+                    }
+                }
+            }
+        }
     }
 }
