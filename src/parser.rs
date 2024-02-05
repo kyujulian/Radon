@@ -1,12 +1,19 @@
 use crate::ast::{self};
 use crate::lexer;
 use crate::token;
+use std::collections::HashMap;
+
+//Type Aliases
+type PrefixParseFn = fn() -> dyn ast::Expression;
+type InfixParseFn = fn(dyn ast::Expression) -> dyn ast::Expression;
 
 pub struct Parser {
     lex: lexer::Lexer,
     cur_token: token::Token,
     peek_token: token::Token,
     errors: Vec<String>,
+    infix_parse_fns: HashMap<token::TokenType, InfixParseFn>,
+    prefix_parse_fns: HashMap<token::TokenType, PrefixParseFn>,
 }
 
 impl Parser {
@@ -16,6 +23,8 @@ impl Parser {
             cur_token: token::Token::from('\0'),
             peek_token: token::Token::from('\0'),
             errors: Vec::new(),
+            infix_parse_fns: HashMap::new(),
+            prefix_parse_fns: HashMap::new(),
         };
 
         p.next_token();
@@ -105,6 +114,14 @@ impl Parser {
         }
 
         return Some(Box::new(program));
+    }
+
+    pub fn register_prefix(&mut self, ttype: token::TokenType, function: PrefixParseFn) {
+        self.prefix_parse_fns.insert(ttype, function);
+    }
+
+    pub fn register_infix(&mut self, ttype: token::TokenType, function: InfixParseFn) {
+        self.infix_parse_fns.insert(ttype, function);
     }
 }
 
