@@ -1,4 +1,4 @@
-use crate::ast::{self, Node, Statement};
+use crate::ast::{self};
 use crate::lexer;
 use crate::token;
 
@@ -51,7 +51,7 @@ impl Parser {
     }
 
     pub fn parse_return_statement(&mut self) -> Option<Box<dyn ast::Statement>> {
-        let mut stmt = ast::ReturnStatement::new();
+        let stmt = ast::ReturnStatement::new();
         self.next_token();
         // TODO: We're skipping the expression, looping until we encounter a semicolon
         while !self.cur_token_is(token::TokenType::SEMICOLON) {
@@ -61,13 +61,12 @@ impl Parser {
     }
 
     pub fn parse_let_statement(&mut self) -> Option<Box<dyn ast::Statement>> {
-        let mut stmt = ast::LetStatement::new();
-
         if !self.expect_peek(token::TokenType::IDENT) {
             return None;
         }
 
-        stmt.name = ast::Identifier::new(self.cur_token.clone(), self.cur_token.literal.clone());
+        let name = ast::Identifier::new(self.cur_token.clone(), self.cur_token.literal.clone());
+        let stmt = ast::LetStatement::new(name, None);
 
         if !self.expect_peek(token::TokenType::ASSIGN) {
             return None;
@@ -96,8 +95,7 @@ impl Parser {
     }
 
     pub fn parse_program(&mut self) -> Option<Box<ast::Program>> {
-        let mut program = ast::Program::new();
-        program.statements = vec![];
+        let mut program = ast::Program::default();
 
         while self.cur_token.token_type != token::TokenType::EOF {
             if let Some(stmt) = self.parse_statement() {
@@ -112,6 +110,7 @@ impl Parser {
 
 #[cfg(test)]
 mod tests {
+    use crate::ast::Node;
     use crate::ast::{LetStatement, ReturnStatement};
 
     use super::*;
@@ -221,7 +220,7 @@ mod tests {
             return 993322;
         ";
 
-        let mut lex = lexer::Lexer::new(input.to_string());
+        let lex = lexer::Lexer::new(input.to_string());
 
         let mut parser = Parser::new(lex);
 
