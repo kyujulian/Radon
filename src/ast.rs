@@ -14,7 +14,7 @@ pub trait Statement: Node + Any {
     fn as_any(&self) -> &dyn Any;
 }
 
-pub trait Expression: Node {
+pub trait Expression: Node + Statement {
     fn expression_node(&self);
 }
 
@@ -86,6 +86,14 @@ impl Node for Identifier {
 }
 impl Expression for Identifier {
     fn expression_node(&self) {}
+}
+
+impl Statement for Identifier {
+    fn statement_node(&self) {}
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 }
 
 // LET STATEMENT
@@ -180,8 +188,14 @@ impl Statement for ReturnStatement {
 
 #[derive(Debug)]
 pub struct ExpressionStatement {
-    token: Token,
-    expression: Box<dyn Expression>,
+    pub token: Token,
+    pub expression: Box<dyn Expression>,
+}
+
+impl ExpressionStatement {
+    pub fn new(token: Token, expression: Box<dyn Expression>) -> Self {
+        Self { token, expression }
+    }
 }
 
 impl Display for ExpressionStatement {

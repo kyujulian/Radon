@@ -1,11 +1,11 @@
 use crate::ast::{self};
 use crate::lexer;
-use crate::token;
+use crate::token::{self, TokenType};
 use std::collections::HashMap;
 
 //Type Aliases
-type PrefixParseFn = fn() -> dyn ast::Expression;
-type InfixParseFn = fn(dyn ast::Expression) -> dyn ast::Expression;
+type PrefixParseFn = fn(parser: &Parser) -> Box<dyn ast::Expression>;
+type InfixParseFn = fn(dyn ast::Expression) -> Box<dyn ast::Expression>;
 
 pub struct Parser {
     lex: lexer::Lexer,
@@ -14,6 +14,16 @@ pub struct Parser {
     errors: Vec<String>,
     infix_parse_fns: HashMap<token::TokenType, InfixParseFn>,
     prefix_parse_fns: HashMap<token::TokenType, PrefixParseFn>,
+}
+
+pub enum ExpressionPriorities {
+    LOWEST,
+    EQUALS,
+    LESSGREATER,
+    SUM,
+    PRODUCT,
+    PREFIX,
+    CALL,
 }
 
 impl Parser {
@@ -27,11 +37,28 @@ impl Parser {
             prefix_parse_fns: HashMap::new(),
         };
 
+        let parse_identifier =
+            |parser: &Parser| -> Box<dyn ast::Expression> { parser.parse_identifier() };
+        p.register_prefix(TokenType::IDENT, parse_identifier);
+
         p.next_token();
         p.next_token();
         p
     }
 
+    // pub fn register_expressions(&mut self) -> &mut Self {
+    //     let parse_identifier =
+    //         |parser: &Parser| -> Box<dyn ast::Expression> { parser.parse_identifier() };
+    //     self.register_prefix(TokenType::IDENT, parse_identifier);
+    //     self
+    // }
+
+    fn parse_identifier(&self) -> Box<dyn ast::Expression> {
+        return Box::new(ast::Identifier::new(
+            self.cur_token.clone(),
+            self.cur_token.literal.clone(),
+        ));
+    }
     /// Returns a read-only view (slice) of the errors
     pub fn errors(&self) -> &[String] {
         self.errors.as_slice()
@@ -55,8 +82,38 @@ impl Parser {
         match self.cur_token.token_type {
             token::TokenType::LET => self.parse_let_statement(),
             token::TokenType::RETURN => self.parse_return_statement(),
-            _ => None,
+            _ => self.parse_expression_statement(),
         }
+    }
+
+    pub fn parse_expression(
+        &self,
+        priority: ExpressionPriorities,
+    ) -> Option<Box<dyn ast::Expression>> {
+        let prefix = self.prefix_parse_fns.get(&self.cur_token.token_type);
+
+        match prefix {
+            None => None,
+            Some(prefix_exp) => {
+                let left_exp = prefix_exp(self);
+                return Some(left_exp);
+            }
+        }
+    }
+
+    pub fn parse_expression_statement(&mut self) -> Option<Box<dyn ast::Statement>> {
+        let expression = self.parse_expression(ExpressionPriorities::LOWEST)?;
+
+        let stmt = ast::ExpressionStatement::new(self.cur_token.clone(), expression);
+
+        if self.peek_token_is(TokenType::SEMICOLON) {
+            self.next_token()
+        }
+
+        return Some(Box::new(stmt));
+    }
+    fn peek_token_is(&self, ttype: token::TokenType) -> bool {
+        self.peek_token.token_type == ttype
     }
 
     pub fn parse_return_statement(&mut self) -> Option<Box<dyn ast::Statement>> {
@@ -127,8 +184,8 @@ impl Parser {
 
 #[cfg(test)]
 mod tests {
-    use crate::ast::Node;
     use crate::ast::{LetStatement, ReturnStatement};
+    use crate::ast::{Node, Statement};
 
     use super::*;
 
@@ -272,6 +329,67 @@ mod tests {
                         );
                     }
                 }
+            }
+        }
+    }
+
+    #[test]
+    fn test_identifier_expression() {
+        let input = "foobar;";
+
+        let lex = lexer::Lexer::new(input.to_string());
+        let mut parser = Parser::new(lex);
+
+        let program = match parser.parse_program() {
+            None => panic!("None from parse_program()"),
+            Some(p) => {
+                check_parser_errors(&parser);
+                p
+            }
+        };
+
+        assert_eq!(
+            program.statements.len(),
+            1,
+            "program.statements does not contain 1 statement, got {}",
+            program.statements.len()
+        );
+
+        let stmt = &program.statements[0]
+            .as_any()
+            .downcast_ref::<ast::ExpressionStatement>();
+
+        assert!(stmt.is_some());
+
+        println!("{:?}", stmt);
+        let ident = stmt
+            .unwrap()
+            .expression
+            .as_any()
+            .downcast_ref::<ast::Identifier>();
+
+        match ident {
+            None => {
+                panic!("Got none from downcast_ref from  -> {:?}", ident);
+            }
+            Some(ident) => {
+                assert_eq!(
+                    ident.token_literal(),
+                    "foobar",
+                    "Token Literal not corresponding to a return statement, got {:?}",
+                    ident.token_literal()
+                );
+                assert_eq!(
+                    ident.value, "foobar",
+                    "Ident Value not corresponding to statement, got {:?}",
+                    ident.value
+                );
+                assert_eq!(
+                    ident.token_literal(),
+                    "foobar",
+                    "Token Literal not corresponding to a return statement, got {:?}",
+                    ident.token_literal()
+                );
             }
         }
     }
