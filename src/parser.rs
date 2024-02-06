@@ -4,7 +4,7 @@ use crate::token::{self, TokenType};
 use std::collections::HashMap;
 
 //Type Aliases
-type PrefixParseFn = fn(parser: &Parser) -> Result<Box<dyn ast::Expression>, ParserError>;
+type PrefixParseFn = fn(parser: &mut Parser) -> Option<Box<dyn ast::Expression>>;
 type InfixParseFn = fn(dyn ast::Expression) -> Box<dyn ast::Expression>;
 
 pub struct Parser {
@@ -46,14 +46,12 @@ impl Parser {
             prefix_parse_fns: HashMap::new(),
         };
 
-        let parse_identifier = |parser: &Parser| -> Result<Box<dyn ast::Expression>, ParserError> {
-            parser.parse_identifier()
-        };
+        let parse_identifier =
+            |parser: &mut Parser| -> Option<Box<dyn ast::Expression>> { parser.parse_identifier() };
 
-        let parse_integer_literal =
-            |parser: &Parser| -> Result<Box<dyn ast::Expression>, ParserError> {
-                parser.parse_integer_literal()
-            };
+        let parse_integer_literal = |parser: &mut Parser| -> Option<Box<dyn ast::Expression>> {
+            parser.parse_integer_literal()
+        };
 
         p.register_prefix(TokenType::IDENT, parse_identifier);
         p.register_prefix(TokenType::INT, parse_integer_literal);
@@ -70,20 +68,24 @@ impl Parser {
     //     self
     // }
 
-    fn parse_integer_literal(&self) -> Result<Box<dyn ast::Expression>, ParserError> {
-        let value = self
-            .cur_token
-            .literal
-            .parse::<i64>()
-            .map_err(|e| ParserError::ParseIntError(e))?;
+    fn parse_integer_literal(&mut self) -> Option<Box<dyn ast::Expression>> {
+        let value = self.cur_token.literal.parse::<i64>();
 
-        let literal = ast::IntegerLiteral::new(self.cur_token.clone(), value);
-
-        Ok(Box::new(literal))
+        match value {
+            Err(val) => {
+                self.errors
+                    .push(format!("Could not parse {} as integer", val));
+                None
+            }
+            Ok(val) => {
+                let literal = ast::IntegerLiteral::new(self.cur_token.clone(), val);
+                Some(Box::new(literal))
+            }
+        }
     }
 
-    fn parse_identifier(&self) -> Result<Box<dyn ast::Expression>, ParserError> {
-        Ok(Box::new(ast::Identifier::new(
+    fn parse_identifier(&self) -> Option<Box<dyn ast::Expression>> {
+        Some(Box::new(ast::Identifier::new(
             self.cur_token.clone(),
             self.cur_token.literal.clone(),
         )))
@@ -107,7 +109,7 @@ impl Parser {
         self.peek_token = self.lex.next_token();
     }
 
-    pub fn parse_statement(&mut self) -> Result<Box<dyn ast::Statement>, ParserError> {
+    pub fn parse_statement(&mut self) -> Option<Box<dyn ast::Statement>> {
         match self.cur_token.token_type {
             token::TokenType::LET => self.parse_let_statement(),
             token::TokenType::RETURN => self.parse_return_statement(),
@@ -116,20 +118,26 @@ impl Parser {
     }
 
     pub fn parse_expression(
-        &self,
+        &mut self,
         priority: ExpressionPriorities,
-    ) -> Result<Box<dyn ast::Expression>, ParserError> {
+    ) -> Option<Box<dyn ast::Expression>> {
         let prefix = self.prefix_parse_fns.get(&self.cur_token.token_type);
 
         match prefix {
-            None => Err(ParserError::NoPrefixParseFn),
+            None => {
+                self.errors.push(format!(
+                    "No prefix parse function for {:?} found",
+                    self.cur_token.token_type
+                ));
+                None
+            }
             Some(prefix_exp) => {
                 return prefix_exp(self);
             }
         }
     }
 
-    pub fn parse_expression_statement(&mut self) -> Result<Box<dyn ast::Statement>, ParserError> {
+    pub fn parse_expression_statement(&mut self) -> Option<Box<dyn ast::Statement>> {
         let expression = self.parse_expression(ExpressionPriorities::LOWEST)?;
 
         let stmt = ast::ExpressionStatement::new(self.cur_token.clone(), expression);
@@ -138,32 +146,37 @@ impl Parser {
             self.next_token()
         }
 
-        return Ok(Box::new(stmt));
+        return Some(Box::new(stmt));
     }
     fn peek_token_is(&self, ttype: token::TokenType) -> bool {
         self.peek_token.token_type == ttype
     }
 
-    pub fn parse_return_statement(&mut self) -> Result<Box<dyn ast::Statement>, ParserError> {
+    pub fn parse_return_statement(&mut self) -> Option<Box<dyn ast::Statement>> {
         let stmt = ast::ReturnStatement::new();
         self.next_token();
         // TODO: We're skipping the expression, looping until we encounter a semicolon
         while !self.cur_token_is(token::TokenType::SEMICOLON) {
             self.next_token();
         }
-        return Ok(Box::new(stmt));
+        return Some(Box::new(stmt));
     }
 
-    pub fn parse_let_statement(&mut self) -> Result<Box<dyn ast::Statement>, ParserError> {
+    pub fn parse_let_statement(&mut self) -> Option<Box<dyn ast::Statement>> {
         if !self.expect_peek(token::TokenType::IDENT) {
-            return Err(ParserError::ExpectPeekTokenError("IDENT".to_string()));
+            self.errors.push(format!(
+                "Expected next token to be of type IDENT, got {:?} instead",
+                self.peek_token.token_type
+            ));
+            return None;
         }
 
         let name = ast::Identifier::new(self.cur_token.clone(), self.cur_token.literal.clone());
         let stmt = ast::LetStatement::new(name, None);
 
         if !self.expect_peek(token::TokenType::ASSIGN) {
-            return Err(ParserError::NoPrefixParseFn);
+            self.peek_error(token::TokenType::ASSIGN);
+            return None;
         }
 
         //TODO: We're skipping the expressions until we encounter a semicolon
@@ -171,7 +184,7 @@ impl Parser {
             self.next_token();
         }
 
-        return Ok(Box::new(stmt));
+        return Some(Box::new(stmt));
     }
 
     pub fn cur_token_is(&self, t: token::TokenType) -> bool {
@@ -192,7 +205,10 @@ impl Parser {
         let mut program = ast::Program::default();
 
         while self.cur_token.token_type != token::TokenType::EOF {
-            if let Ok(stmt) = self.parse_statement() {
+            if let Some(stmt) = self.parse_statement() {
+                // all the parsing errors die here, so does
+                // it make sense to return a Result here ?
+                // Think not, Option should be better, we'll see
                 program.statements.push(stmt);
             }
             self.next_token()
