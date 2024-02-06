@@ -14,8 +14,9 @@ pub trait Statement: Node + Any {
     fn as_any(&self) -> &dyn Any;
 }
 
-pub trait Expression: Node + Statement {
+pub trait Expression: Node {
     fn expression_node(&self);
+    fn as_any(&self) -> &dyn Any;
 }
 
 // PROGRAM
@@ -60,7 +61,6 @@ impl Node for Program {
 }
 
 // IDENTIFIER
-
 #[derive(Debug, PartialEq)]
 pub struct Identifier {
     pub token: Token,
@@ -86,10 +86,6 @@ impl Node for Identifier {
 }
 impl Expression for Identifier {
     fn expression_node(&self) {}
-}
-
-impl Statement for Identifier {
-    fn statement_node(&self) {}
 
     fn as_any(&self) -> &dyn Any {
         self
@@ -210,6 +206,38 @@ impl Node for ExpressionStatement {
 }
 impl Statement for ExpressionStatement {
     fn statement_node(&self) {}
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+#[derive(Debug)]
+pub struct IntegerLiteral {
+    token: Token,
+    pub value: i64,
+}
+
+impl IntegerLiteral {
+    pub fn new(token: Token, value: i64) -> Self {
+        return Self { token, value };
+    }
+}
+
+impl Display for IntegerLiteral {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", self.token_literal())
+    }
+}
+
+impl Node for IntegerLiteral {
+    fn token_literal(&self) -> String {
+        self.token.literal.clone()
+    }
+}
+
+impl Expression for IntegerLiteral {
+    fn expression_node(&self) {}
+
     fn as_any(&self) -> &dyn Any {
         self
     }
