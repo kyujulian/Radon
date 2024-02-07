@@ -498,4 +498,68 @@ mod tests {
 
         Ok(())
     }
+
+    pub struct PrefixTest {
+        pub input: String,
+        pub operator: String,
+        pub integer_value: i64,
+    }
+    #[test]
+    fn test_parsing_prefix_expressions() {
+        let prefix_tests = vec![
+            PrefixTest {
+                input: "!5".to_string(),
+                operator: "!".to_string(),
+                integer_value: 5,
+            },
+            PrefixTest {
+                input: "-15".to_string(),
+                operator: "-".to_string(),
+                integer_value: 15,
+            },
+        ];
+
+        for test in prefix_tests {
+            let mut lex = Lexer::new(test.input);
+            let mut parser = Parser::new(lex);
+
+            let program = match parser.parse_program() {
+                None => panic!("Not able to parse the Program"),
+                Some(p) => {
+                    check_parser_errors(&parser);
+                    p
+                }
+            };
+
+            assert_eq!(program.statements.len(), 1);
+
+            let statement = program.statements[0]
+                .as_any()
+                .downcast_ref::<ast::ExpressionStatement>()
+                .expect("Downcaset_ref failed");
+
+            let exp = statement
+                .expression
+                .as_any()
+                .downcast_ref::<ast::PrefixExpression>()
+                .expect("Downcast_ref failed");
+
+            assert_eq!(exp.operator, test.operator);
+
+            assert!(test_integer_literal(&exp.right, test.integer_value))
+        }
+    }
+
+    fn test_integer_literal(il: &Box<dyn ast::Expression>, value: i64) -> bool {
+        let int_lit = il
+            .as_any()
+            .downcast_ref::<ast::IntegerLiteral>()
+            .expect(format!("Downcast_ref failed for {:?}", il).as_str());
+
+        assert_eq!(int_lit.value, value);
+
+        assert_eq!(int_lit.token_literal(), format!("{value}"));
+
+        true
+    }
 }

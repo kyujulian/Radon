@@ -5,6 +5,7 @@ use std::any::Any;
 
 // Traits
 pub trait Node: Debug + Display {
+    /// returns Cloned value of the inner token literal
     fn token_literal(&self) -> String;
 }
 
@@ -238,6 +239,32 @@ impl Node for IntegerLiteral {
 impl Expression for IntegerLiteral {
     fn expression_node(&self) {}
 
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+#[derive(Debug)]
+pub struct PrefixExpression {
+    pub token: Token,
+    pub operator: String,
+    pub right: Box<dyn Expression>,
+}
+
+impl Display for PrefixExpression {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "({},{})", self.operator, self.right)
+    }
+}
+
+impl Node for PrefixExpression {
+    fn token_literal(&self) -> String {
+        self.token.literal.clone()
+    }
+}
+
+impl Expression for PrefixExpression {
+    fn expression_node(&self) {}
     fn as_any(&self) -> &dyn Any {
         self
     }
