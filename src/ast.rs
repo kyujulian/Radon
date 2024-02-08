@@ -284,6 +284,53 @@ impl Expression for PrefixExpression {
     }
 }
 
+#[derive(Debug)]
+pub struct InfixExpression {
+    pub token: Token,
+    pub left: Box<dyn Expression>,
+    pub operator: String,
+    pub right: Option<Box<dyn Expression>>,
+}
+
+impl InfixExpression {
+    pub fn new(
+        token: Token,
+        left: Box<dyn Expression>,
+        operator: String,
+        right: Option<Box<dyn Expression>>,
+    ) -> Self {
+        Self {
+            token,
+            left,
+            operator,
+            right,
+        }
+    }
+}
+
+impl Display for InfixExpression {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let right_write = match &self.right {
+            None => "".to_string(),
+            Some(s) => format!("{s}"),
+        };
+        write!(f, "({} {} {})", self.left, self.operator, right_write)
+    }
+}
+
+impl Node for InfixExpression {
+    fn token_literal(&self) -> String {
+        self.token.literal.clone()
+    }
+}
+
+impl Expression for InfixExpression {
+    fn expression_node(&self) {}
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::token::Token;

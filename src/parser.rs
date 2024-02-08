@@ -1,11 +1,13 @@
 use crate::ast::{self};
 use crate::lexer;
 use crate::token::{self, TokenType};
+use lazy_static::lazy_static;
 use std::collections::HashMap;
 
 //Type Aliases
 type PrefixParseFn = fn(parser: &mut Parser) -> Option<Box<dyn ast::Expression>>;
-type InfixParseFn = fn(dyn ast::Expression) -> Box<dyn ast::Expression>;
+type InfixParseFn =
+    fn(parser: &mut Parser, left: Box<dyn ast::Expression>) -> Option<Box<dyn ast::Expression>>;
 
 #[derive(Debug)]
 pub struct Parser {
@@ -17,6 +19,7 @@ pub struct Parser {
     prefix_parse_fns: HashMap<token::TokenType, PrefixParseFn>,
 }
 
+#[derive(Copy, Clone)]
 pub enum ExpressionPriorities {
     LOWEST,
     EQUALS,
@@ -25,6 +28,22 @@ pub enum ExpressionPriorities {
     PRODUCT,
     PREFIX,
     CALL,
+}
+
+lazy_static! {
+    static ref PRECEDENCES: HashMap<token::TokenType, ExpressionPriorities> = {
+        let mut m = HashMap::new();
+        m.insert(token::TokenType::EQ, ExpressionPriorities::EQUALS);
+        m.insert(token::TokenType::NEQ, ExpressionPriorities::EQUALS);
+        m.insert(token::TokenType::LT, ExpressionPriorities::LESSGREATER);
+        m.insert(token::TokenType::GT, ExpressionPriorities::LESSGREATER);
+        m.insert(token::TokenType::PLUS, ExpressionPriorities::SUM);
+        m.insert(token::TokenType::MINUS, ExpressionPriorities::SUM);
+        m.insert(token::TokenType::SLASH, ExpressionPriorities::PRODUCT);
+        m.insert(token::TokenType::ASTERISK, ExpressionPriorities::PRODUCT);
+        m.insert(token::TokenType::LPAREN, ExpressionPriorities::CALL);
+        m
+    };
 }
 
 // Should I reach for thiserrror ?
@@ -58,11 +77,27 @@ impl Parser {
             parser.parse_prefix_expression()
         };
 
+        let parse_infix_expression = |parser: &mut Parser,
+                                      left: Box<dyn ast::Expression>|
+         -> Option<Box<dyn ast::Expression>> {
+            parser.parse_infix_expression(left)
+        };
+
         p.register_prefix(TokenType::IDENT, parse_identifier);
         p.register_prefix(TokenType::INT, parse_integer_literal);
 
         p.register_prefix(TokenType::BANG, parse_prefix_expression);
         p.register_prefix(TokenType::MINUS, parse_prefix_expression);
+
+        //Registring infix
+        p.register_infix(TokenType::PLUS, parse_infix_expression);
+        p.register_infix(TokenType::MINUS, parse_infix_expression);
+        p.register_infix(TokenType::SLASH, parse_infix_expression);
+        p.register_infix(TokenType::ASTERISK, parse_infix_expression);
+        p.register_infix(TokenType::EQ, parse_infix_expression);
+        p.register_infix(TokenType::NEQ, parse_infix_expression);
+        p.register_infix(TokenType::LT, parse_infix_expression);
+        p.register_infix(TokenType::GT, parse_infix_expression);
 
         p.next_token();
         p.next_token();
@@ -97,6 +132,29 @@ impl Parser {
                 Some(Box::new(literal))
             }
         }
+    }
+
+    fn parse_infix_expression(
+        &mut self,
+        left: Box<dyn ast::Expression>,
+    ) -> Option<Box<dyn ast::Expression>> {
+        let mut expression = ast::InfixExpression::new(
+            self.cur_token.clone(),
+            left,
+            self.cur_token.literal.clone(),
+            None,
+        );
+        let precedence = self.cur_precedence();
+
+        self.next_token();
+
+        let right = self.parse_expression(precedence);
+
+        expression.right = right;
+
+        // return Some(Box::new(expression));
+
+        return Some(Box::new(expression));
     }
 
     fn parse_identifier(&self) -> Option<Box<dyn ast::Expression>> {
@@ -134,7 +192,7 @@ impl Parser {
 
     pub fn parse_expression(
         &mut self,
-        priority: ExpressionPriorities,
+        precedence: ExpressionPriorities,
     ) -> Option<Box<dyn ast::Expression>> {
         let prefix = self.prefix_parse_fns.get(&self.cur_token.token_type);
 
@@ -147,7 +205,20 @@ impl Parser {
                 None
             }
             Some(prefix_exp) => {
-                return prefix_exp(self);
+                let mut left_exp = prefix_exp(self);
+                while !self.peek_token_is(token::TokenType::SEMICOLON) {
+                    let peek_token_type = self.peek_token.token_type.clone();
+                    let thing = self.infix_parse_fns.clone();
+                    let infix_fn = thing.get(&peek_token_type);
+                    match infix_fn {
+                        None => return left_exp,
+                        Some(infix) => {
+                            self.next_token();
+                            left_exp = infix(self, left_exp.unwrap());
+                        }
+                    }
+                }
+                return left_exp;
             }
         }
     }
@@ -238,6 +309,24 @@ impl Parser {
 
     pub fn register_infix(&mut self, ttype: token::TokenType, function: InfixParseFn) {
         self.infix_parse_fns.insert(ttype, function);
+    }
+
+    pub fn peek_precedence(&self) -> ExpressionPriorities {
+        let precedence = PRECEDENCES.get(&self.peek_token.token_type);
+
+        match precedence {
+            None => ExpressionPriorities::LOWEST,
+            Some(p) => *p,
+        }
+    }
+
+    pub fn cur_precedence(&self) -> ExpressionPriorities {
+        let precedence = PRECEDENCES.get(&self.cur_token.token_type);
+
+        match precedence {
+            None => ExpressionPriorities::LOWEST,
+            Some(p) => *p,
+        }
     }
 }
 
@@ -582,5 +671,78 @@ mod tests {
         assert_eq!(int_lit.token_literal(), format!("{value}"));
 
         true
+    }
+
+    pub struct InfixTestExpression {
+        pub input: String,
+        pub left_value: i64,
+        pub operator: String,
+        pub right_value: i64,
+    }
+
+    impl InfixTestExpression {
+        pub fn new(
+            input: String,
+            left_value: i64,
+            operator: String,
+            right_value: i64,
+        ) -> InfixTestExpression {
+            InfixTestExpression {
+                input,
+                left_value,
+                operator,
+                right_value,
+            }
+        }
+    }
+    #[test]
+    fn test_parse_infix_expressions() {
+        let infix_tests = vec![
+            InfixTestExpression::new("5 + 5".to_string(), 5, "+".to_string(), 5),
+            InfixTestExpression::new("5 - 5".to_string(), 5, "-".to_string(), 5),
+            InfixTestExpression::new("5 * 5".to_string(), 5, "*".to_string(), 5),
+            InfixTestExpression::new("5 / 5".to_string(), 5, "/".to_string(), 5),
+            InfixTestExpression::new("5 > 5".to_string(), 5, ">".to_string(), 5),
+            InfixTestExpression::new("5 < 5".to_string(), 5, "<".to_string(), 5),
+            InfixTestExpression::new("5 == 5".to_string(), 5, "==".to_string(), 5),
+            InfixTestExpression::new("5 != 5".to_string(), 5, "!=".to_string(), 5),
+        ];
+
+        for test in infix_tests {
+            let lex = Lexer::new(test.input);
+            let mut parser = Parser::new(lex);
+
+            let program = match parser.parse_program() {
+                None => panic!("Failed to parse program"),
+                Some(p) => {
+                    check_parser_errors(&parser);
+                    p
+                }
+            };
+
+            let statement = program.statements[0]
+                .as_any()
+                .downcast_ref::<ast::ExpressionStatement>()
+                .expect("Failed to cast stmt to ExpressionStatement");
+
+            let expression = statement
+                .expression
+                .as_any()
+                .downcast_ref::<ast::InfixExpression>()
+                .expect(
+                    format!(
+                        "Failed to cast expression as Infix Operation {:#?}",
+                        statement
+                    )
+                    .as_str(),
+                );
+
+            assert_eq!(expression.operator, test.operator);
+
+            assert!(test_integer_literal(
+                &Box::new(expression.right.as_ref().unwrap()),
+                test.right_value
+            ));
+        }
     }
 }
