@@ -7,6 +7,7 @@ use std::collections::HashMap;
 type PrefixParseFn = fn(parser: &mut Parser) -> Option<Box<dyn ast::Expression>>;
 type InfixParseFn = fn(dyn ast::Expression) -> Box<dyn ast::Expression>;
 
+#[derive(Debug)]
 pub struct Parser {
     lex: lexer::Lexer,
     cur_token: token::Token,
@@ -53,20 +54,34 @@ impl Parser {
             parser.parse_integer_literal()
         };
 
+        let parse_prefix_expression = |parser: &mut Parser| -> Option<Box<dyn ast::Expression>> {
+            parser.parse_prefix_expression()
+        };
+
         p.register_prefix(TokenType::IDENT, parse_identifier);
         p.register_prefix(TokenType::INT, parse_integer_literal);
+
+        p.register_prefix(TokenType::BANG, parse_prefix_expression);
+        p.register_prefix(TokenType::MINUS, parse_prefix_expression);
 
         p.next_token();
         p.next_token();
         p
     }
 
-    // pub fn register_expressions(&mut self) -> &mut Self {
-    //     let parse_identifier =
-    //         |parser: &Parser| -> Box<dyn ast::Expression> { parser.parse_identifier() };
-    //     self.register_prefix(TokenType::IDENT, parse_identifier);
-    //     self
-    // }
+    fn parse_prefix_expression(&mut self) -> Option<Box<dyn ast::Expression>> {
+        let cur_token = self.cur_token.clone();
+        let cur_token_literal = self.cur_token.literal.clone();
+
+        // if this order changes
+        // this runs in infinite loop
+        self.next_token();
+        let right = self.parse_expression(ExpressionPriorities::PREFIX);
+
+        let expression = ast::PrefixExpression::new(cur_token, cur_token_literal, right);
+
+        return Some(Box::new(expression));
+    }
 
     fn parse_integer_literal(&mut self) -> Option<Box<dyn ast::Expression>> {
         let value = self.cur_token.literal.parse::<i64>();
@@ -126,7 +141,7 @@ impl Parser {
         match prefix {
             None => {
                 self.errors.push(format!(
-                    "No prefix parse function for {:?} found",
+                    "No prefix parse function for '{}' found",
                     self.cur_token.token_type
                 ));
                 None
@@ -520,9 +535,10 @@ mod tests {
         ];
 
         for test in prefix_tests {
-            let mut lex = Lexer::new(test.input);
+            let lex = Lexer::new(test.input);
             let mut parser = Parser::new(lex);
 
+            //
             let program = match parser.parse_program() {
                 None => panic!("Not able to parse the Program"),
                 Some(p) => {
@@ -530,7 +546,7 @@ mod tests {
                     p
                 }
             };
-
+            //
             assert_eq!(program.statements.len(), 1);
 
             let statement = program.statements[0]
@@ -546,7 +562,12 @@ mod tests {
 
             assert_eq!(exp.operator, test.operator);
 
-            assert!(test_integer_literal(&exp.right, test.integer_value))
+            //some solid nice syntax here
+            if let Some(exp_right_ref) = exp.right.as_ref() {
+                assert!(test_integer_literal(exp_right_ref, test.integer_value));
+            } else {
+                panic!("Got none in {:?}", exp.right);
+            }
         }
     }
 

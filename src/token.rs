@@ -46,6 +46,31 @@ pub struct Token {
     pub literal: String,
 }
 
+impl std::fmt::Display for TokenType {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let mut write_buf = |s: String| -> std::fmt::Result { write!(f, "{s}") };
+        match self {
+            TokenType::SEMICOLON => write_buf(';'.to_string()),
+            TokenType::ASSIGN => write_buf('='.to_string()),
+            TokenType::LPAREN => write_buf('('.to_string()),
+            TokenType::RPAREN => write_buf(')'.to_string()),
+            TokenType::COMMA => write_buf(','.to_string()),
+            TokenType::RBRACE => write_buf('}'.to_string()),
+            TokenType::LBRACE => write_buf('{'.to_string()),
+            TokenType::EOF => write_buf('\0'.to_string()),
+            TokenType::PLUS => write_buf('+'.to_string()),
+            TokenType::MINUS => write_buf('-'.to_string()),
+            TokenType::ASTERISK => write_buf('*'.to_string()),
+            TokenType::BANG => write_buf('!'.to_string()),
+            TokenType::SLASH => write_buf('/'.to_string()),
+            TokenType::LT => write_buf('<'.to_string()),
+            TokenType::GT => write_buf('>'.to_string()),
+
+            _ => write_buf(format!("{:?}", self)),
+        }
+    }
+}
+
 impl From<char> for Token {
     fn from(ch: char) -> Token {
         match ch {

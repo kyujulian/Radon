@@ -248,12 +248,26 @@ impl Expression for IntegerLiteral {
 pub struct PrefixExpression {
     pub token: Token,
     pub operator: String,
-    pub right: Box<dyn Expression>,
+    pub right: Option<Box<dyn Expression>>,
+}
+
+impl PrefixExpression {
+    pub fn new(token: Token, operator: String, right: Option<Box<dyn Expression>>) -> Self {
+        Self {
+            token,
+            operator,
+            right,
+        }
+    }
 }
 
 impl Display for PrefixExpression {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "({},{})", self.operator, self.right)
+        let right_write = match &self.right {
+            None => "".to_string(),
+            Some(s) => format!("{s}"),
+        };
+        write!(f, "({},{})", self.operator, right_write)
     }
 }
 
