@@ -19,15 +19,15 @@ pub struct Parser {
     prefix_parse_fns: HashMap<token::TokenType, PrefixParseFn>,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq, PartialOrd)]
 pub enum ExpressionPriorities {
-    LOWEST,
-    EQUALS,
-    LESSGREATER,
-    SUM,
-    PRODUCT,
-    PREFIX,
-    CALL,
+    LOWEST = 1,
+    EQUALS = 2,
+    LESSGREATER = 3,
+    SUM = 4,
+    PRODUCT = 5,
+    PREFIX = 6,
+    CALL = 7,
 }
 
 lazy_static! {
@@ -205,24 +205,29 @@ impl Parser {
                 None
             }
             Some(prefix_exp) => {
-                let mut left_exp = prefix_exp(self);
-                while !self.peek_token_is(token::TokenType::SEMICOLON) {
+                let mut left_exp = prefix_exp(self)?;
+                while !self.peek_token_is(token::TokenType::SEMICOLON)
+                    && precedence < self.peek_precedence()
+                {
                     let peek_token_type = self.peek_token.token_type.clone();
-                    let thing = self.infix_parse_fns.clone();
-                    let infix_fn = thing.get(&peek_token_type);
+                    // let thing = self.infix_parse_fns.clone();
+                    let infix_fn = self.get_infix_fn(peek_token_type);
                     match infix_fn {
-                        None => return left_exp,
+                        None => return Some(left_exp),
                         Some(infix) => {
                             self.next_token();
-                            left_exp = infix(self, left_exp.unwrap());
+                            left_exp = infix(self, left_exp)?;
                         }
                     }
                 }
-                return left_exp;
+                return Some(left_exp);
             }
         }
     }
 
+    fn get_infix_fn(&self, token_type: token::TokenType) -> Option<InfixParseFn> {
+        self.infix_parse_fns.get(&token_type).copied()
+    }
     pub fn parse_expression_statement(&mut self) -> Option<Box<dyn ast::Statement>> {
         let expression = self.parse_expression(ExpressionPriorities::LOWEST)?;
 
