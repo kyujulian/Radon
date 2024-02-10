@@ -267,7 +267,7 @@ impl Display for PrefixExpression {
             None => "".to_string(),
             Some(s) => format!("{s}"),
         };
-        write!(f, "({},{})", self.operator, right_write)
+        write!(f, "({}{})", self.operator, right_write)
     }
 }
 

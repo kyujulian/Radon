@@ -2,6 +2,7 @@ use crate::ast::{self};
 use crate::lexer;
 use crate::token::{self, TokenType};
 use lazy_static::lazy_static;
+use std::any::TypeId;
 use std::collections::HashMap;
 
 //Type Aliases
@@ -337,26 +338,28 @@ impl Parser {
 
 #[cfg(test)]
 mod tests {
+    use std::any::Any;
+
     use crate::ast::{LetStatement, ReturnStatement};
     use crate::ast::{Node, Statement};
     use crate::lexer::Lexer;
 
     use super::*;
 
-    #[derive(Clone, Debug)]
-    struct TestIdentifier {
-        expected_identifier: String,
-    }
-    impl From<&str> for TestIdentifier {
-        fn from(s: &str) -> TestIdentifier {
-            TestIdentifier {
-                expected_identifier: s.to_string(),
-            }
-        }
-    }
-
     #[test]
     fn test_let_statements() {
+        #[derive(Clone, Debug)]
+        struct TestIdentifier {
+            expected_identifier: String,
+        }
+        impl From<&str> for TestIdentifier {
+            fn from(s: &str) -> TestIdentifier {
+                TestIdentifier {
+                    expected_identifier: s.to_string(),
+                }
+            }
+        }
+
         let input = "
         let x = 5;
         let y = 10;
@@ -665,6 +668,33 @@ mod tests {
         }
     }
 
+    fn test_identifier(ident: &Box<dyn ast::Expression>, value: &str) -> bool {
+        let ident = ident
+            .as_any()
+            .downcast_ref::<ast::Identifier>()
+            .expect(format!("Downcast_ref failed for {:?}", ident).as_str());
+
+        assert_eq!(ident.value, value);
+
+        assert_eq!(ident.token_literal(), format!("{value}"));
+
+        true
+    }
+
+    enum Expected {
+        Integer(i32),
+        Integer64(i64),
+        Identifier(String),
+    }
+
+    fn test_literal_expression(exp: &Box<dyn ast::Expression>, expected: Expected) -> bool {
+        match expected {
+            Expected::Integer(val) => test_integer_literal(exp, val as i64),
+            Expected::Integer64(val) => test_integer_literal(exp, val),
+            Expected::Identifier(val) => test_identifier(exp, &val),
+        }
+    }
+
     fn test_integer_literal(il: &Box<dyn ast::Expression>, value: i64) -> bool {
         let int_lit = il
             .as_any()
@@ -730,24 +760,110 @@ mod tests {
                 .downcast_ref::<ast::ExpressionStatement>()
                 .expect("Failed to cast stmt to ExpressionStatement");
 
-            let expression = statement
-                .expression
-                .as_any()
-                .downcast_ref::<ast::InfixExpression>()
-                .expect(
-                    format!(
-                        "Failed to cast expression as Infix Operation {:#?}",
-                        statement
-                    )
-                    .as_str(),
-                );
+            test_infix_expression(
+                &statement.expression,
+                Expected::Integer64(test.left_value),
+                test.operator.as_str(),
+                Expected::Integer64(test.right_value),
+            );
 
-            assert_eq!(expression.operator, test.operator);
+            // let expression = statement
+            //     .expression
+            //     .as_any()
+            //     .downcast_ref::<ast::InfixExpression>()
+            //     .expect(
+            //         format!(
+            //             "Failed to cast expression as Infix Operation {:#?}",
+            //             statement
+            //         )
+            //         .as_str(),
+            //     );
+            //
+            // assert_eq!(expression.operator, test.operator);
+            //
+            // assert!(test_integer_literal(
+            //     &Box::new(expression.right.as_ref().unwrap()),
+            //     test.right_value
+            // ));
+        }
+    }
 
-            assert!(test_integer_literal(
-                &Box::new(expression.right.as_ref().unwrap()),
-                test.right_value
-            ));
+    fn test_infix_expression(
+        exp: &Box<dyn ast::Expression>,
+        left: Expected,
+        operators: &str,
+        right: Expected,
+    ) -> bool {
+        let infix = exp
+            .as_any()
+            .downcast_ref::<ast::InfixExpression>()
+            .expect("Failed to cast to InfixExpression");
+
+        assert!(test_literal_expression(&infix.left, left));
+        assert_eq!(infix.operator, operators);
+        assert!(test_literal_expression(
+            &infix.right.as_ref().unwrap(),
+            right
+        ));
+
+        true
+    }
+    #[test]
+    fn test_operator_precedence_parsing() {
+        struct OperatorPrecedenceTest {
+            input: String,
+            expected: String,
+        };
+        impl OperatorPrecedenceTest {
+            pub fn new(input: String, expected: String) -> OperatorPrecedenceTest {
+                OperatorPrecedenceTest { input, expected }
+            }
+        }
+
+        let tests = vec![
+            OperatorPrecedenceTest::new("-a * b".to_string(), "((-a) * b)".to_string()),
+            OperatorPrecedenceTest::new("!-a".to_string(), "(!(-a))".to_string()),
+            OperatorPrecedenceTest::new("a + b + c".to_string(), "((a + b) + c)".to_string()),
+            OperatorPrecedenceTest::new("a + b - c".to_string(), "((a + b) - c)".to_string()),
+            OperatorPrecedenceTest::new("a * b * c".to_string(), "((a * b) * c)".to_string()),
+            OperatorPrecedenceTest::new("a * b / c".to_string(), "((a * b) / c)".to_string()),
+            OperatorPrecedenceTest::new("a + b / c".to_string(), "(a + (b / c))".to_string()),
+            OperatorPrecedenceTest::new(
+                "a + b * c + d / e - f".to_string(),
+                "(((a + (b * c)) + (d / e)) - f)".to_string(),
+            ),
+            OperatorPrecedenceTest::new(
+                "3 + 4; -5 * 5".to_string(),
+                "(3 + 4) ((-5) * 5)".to_string(),
+            ),
+            OperatorPrecedenceTest::new(
+                "5 > 4 == 3 < 4".to_string(),
+                "((5 > 4) == (3 < 4))".to_string(),
+            ),
+            OperatorPrecedenceTest::new(
+                "5 < 4 != 3 > 4".to_string(),
+                "((5 < 4) != (3 > 4))".to_string(),
+            ),
+            OperatorPrecedenceTest::new(
+                "3 + 4 * 5 == 3 * 1 + 4 * 5".to_string(),
+                "((3 + (4 * 5)) == ((3 * 1) + (4 * 5)))".to_string(),
+            ),
+        ];
+
+        for test in tests {
+            let lex = Lexer::new(test.input);
+            let mut parser = Parser::new(lex);
+
+            let program = match parser.parse_program() {
+                None => panic!("Failed to parse program"),
+                Some(p) => {
+                    check_parser_errors(&parser);
+                    p
+                }
+            };
+
+            let actual = program.to_string();
+            assert_eq!(actual, test.expected);
         }
     }
 }
