@@ -84,6 +84,9 @@ impl Parser {
             parser.parse_infix_expression(left)
         };
 
+        let parse_boolean =
+            |parser: &mut Parser| -> Option<Box<dyn ast::Expression>> { parser.parse_boolean() };
+
         p.register_prefix(TokenType::IDENT, parse_identifier);
         p.register_prefix(TokenType::INT, parse_integer_literal);
 
@@ -100,11 +103,19 @@ impl Parser {
         p.register_infix(TokenType::LT, parse_infix_expression);
         p.register_infix(TokenType::GT, parse_infix_expression);
 
+        p.register_prefix(TokenType::TRUE, parse_boolean);
+        p.register_prefix(TokenType::FALSE, parse_boolean);
+
         p.next_token();
         p.next_token();
         p
     }
 
+    fn parse_boolean(&self) -> Option<Box<dyn ast::Expression>> {
+        let token = self.cur_token.clone();
+        let value = self.cur_token_is(TokenType::TRUE);
+        Some(Box::new(ast::Boolean::new(token, value)))
+    }
     fn parse_prefix_expression(&mut self) -> Option<Box<dyn ast::Expression>> {
         let cur_token = self.cur_token.clone();
         let cur_token_literal = self.cur_token.literal.clone();
@@ -491,6 +502,53 @@ mod tests {
     }
 
     #[test]
+    fn test_boolean_expression() {
+        let input = "true;";
+
+        let lex = lexer::Lexer::new(input.to_string());
+        let mut parser = Parser::new(lex);
+
+        let program = match parser.parse_program() {
+            None => panic!("None from parse_program()"),
+            Some(p) => {
+                check_parser_errors(&parser);
+                p
+            }
+        };
+
+        assert_eq!(
+            program.statements.len(),
+            1,
+            "program.statements does not contain 1 statement, got {}",
+            program.statements.len()
+        );
+
+        let stmt = &program.statements[0]
+            .as_any()
+            .downcast_ref::<ast::ExpressionStatement>()
+            .expect(format!("downcast_ref failed for {:?}", program.statements[0]).as_ref());
+
+        let ident = stmt.expression.as_any().downcast_ref::<ast::Boolean>();
+
+        match ident {
+            None => panic!("Got none from downcast_ref from  -> {:?}", ident),
+            Some(ident) => {
+                assert_eq!(
+                    ident.token_literal(),
+                    "true",
+                    "Token Literal not corresponding to a return statement, got {:?}",
+                    ident.token_literal()
+                );
+                assert_eq!(
+                    ident.value, true,
+                    "Ident Value not corresponding to statement, got {:?}",
+                    ident.value
+                );
+            }
+        }
+    }
+
+    #[test]
     fn test_identifier_expression() {
         let input = "foobar;";
 
@@ -611,23 +669,33 @@ mod tests {
         Ok(())
     }
 
-    pub struct PrefixTest {
-        pub input: String,
-        pub operator: String,
-        pub integer_value: i64,
-    }
     #[test]
     fn test_parsing_prefix_expressions() {
+        pub struct PrefixTest {
+            pub input: String,
+            pub operator: String,
+            pub value: Expected,
+        }
         let prefix_tests = vec![
             PrefixTest {
                 input: "!5".to_string(),
                 operator: "!".to_string(),
-                integer_value: 5,
+                value: Expected::Integer64(5),
             },
             PrefixTest {
                 input: "-15".to_string(),
                 operator: "-".to_string(),
-                integer_value: 15,
+                value: Expected::Integer(15),
+            },
+            PrefixTest {
+                input: "!true".to_string(),
+                operator: "!".to_string(),
+                value: Expected::Bool(true),
+            },
+            PrefixTest {
+                input: "!false".to_string(),
+                operator: "!".to_string(),
+                value: Expected::Bool(false),
             },
         ];
 
@@ -659,9 +727,19 @@ mod tests {
 
             assert_eq!(exp.operator, test.operator);
 
-            //some solid nice syntax here
             if let Some(exp_right_ref) = exp.right.as_ref() {
-                assert!(test_integer_literal(exp_right_ref, test.integer_value));
+                match test.value {
+                    Expected::Integer(val) => {
+                        assert!(test_integer_literal(exp_right_ref, val as i64));
+                    }
+                    Expected::Integer64(val) => {
+                        assert!(test_integer_literal(exp_right_ref, val));
+                    }
+                    Expected::Bool(val) => {
+                        assert!(test_boolean_literal(exp_right_ref, val));
+                    }
+                    _ => panic!("Invalid test value"),
+                }
             } else {
                 panic!("Got none in {:?}", exp.right);
             }
@@ -685,6 +763,7 @@ mod tests {
         Integer(i32),
         Integer64(i64),
         Identifier(String),
+        Bool(bool),
     }
 
     fn test_literal_expression(exp: &Box<dyn ast::Expression>, expected: Expected) -> bool {
@@ -692,7 +771,21 @@ mod tests {
             Expected::Integer(val) => test_integer_literal(exp, val as i64),
             Expected::Integer64(val) => test_integer_literal(exp, val),
             Expected::Identifier(val) => test_identifier(exp, &val),
+            Expected::Bool(val) => test_boolean_literal(exp, val),
         }
+    }
+
+    fn test_boolean_literal(exp: &Box<dyn ast::Expression>, expected: bool) -> bool {
+        let bool_lit = exp
+            .as_any()
+            .downcast_ref::<ast::Boolean>()
+            .expect(format!("Downcast_ref failed for {:?}", exp).as_str());
+
+        assert_eq!(bool_lit.value, expected);
+
+        assert_eq!(bool_lit.token_literal(), format!("{expected}"));
+
+        true
     }
 
     fn test_integer_literal(il: &Box<dyn ast::Expression>, value: i64) -> bool {
@@ -710,17 +803,17 @@ mod tests {
 
     pub struct InfixTestExpression {
         pub input: String,
-        pub left_value: i64,
+        pub left_value: Expected,
         pub operator: String,
-        pub right_value: i64,
+        pub right_value: Expected,
     }
 
     impl InfixTestExpression {
         pub fn new(
             input: String,
-            left_value: i64,
+            left_value: Expected,
             operator: String,
-            right_value: i64,
+            right_value: Expected,
         ) -> InfixTestExpression {
             InfixTestExpression {
                 input,
@@ -733,14 +826,72 @@ mod tests {
     #[test]
     fn test_parse_infix_expressions() {
         let infix_tests = vec![
-            InfixTestExpression::new("5 + 5".to_string(), 5, "+".to_string(), 5),
-            InfixTestExpression::new("5 - 5".to_string(), 5, "-".to_string(), 5),
-            InfixTestExpression::new("5 * 5".to_string(), 5, "*".to_string(), 5),
-            InfixTestExpression::new("5 / 5".to_string(), 5, "/".to_string(), 5),
-            InfixTestExpression::new("5 > 5".to_string(), 5, ">".to_string(), 5),
-            InfixTestExpression::new("5 < 5".to_string(), 5, "<".to_string(), 5),
-            InfixTestExpression::new("5 == 5".to_string(), 5, "==".to_string(), 5),
-            InfixTestExpression::new("5 != 5".to_string(), 5, "!=".to_string(), 5),
+            InfixTestExpression::new(
+                "5 + 5".to_string(),
+                Expected::Integer64(5),
+                "+".to_string(),
+                Expected::Integer64(5),
+            ),
+            InfixTestExpression::new(
+                "5 - 5".to_string(),
+                Expected::Integer64(5),
+                "-".to_string(),
+                Expected::Integer64(5),
+            ),
+            InfixTestExpression::new(
+                "5 * 5".to_string(),
+                Expected::Integer64(5),
+                "*".to_string(),
+                Expected::Integer64(5),
+            ),
+            InfixTestExpression::new(
+                "5 / 5".to_string(),
+                Expected::Integer64(5),
+                "/".to_string(),
+                Expected::Integer64(5),
+            ),
+            InfixTestExpression::new(
+                "5 > 5".to_string(),
+                Expected::Integer64(5),
+                ">".to_string(),
+                Expected::Integer64(5),
+            ),
+            InfixTestExpression::new(
+                "5 < 5".to_string(),
+                Expected::Integer64(5),
+                "<".to_string(),
+                Expected::Integer64(5),
+            ),
+            InfixTestExpression::new(
+                "5 == 5".to_string(),
+                Expected::Integer64(5),
+                "==".to_string(),
+                Expected::Integer64(5),
+            ),
+            InfixTestExpression::new(
+                "5 != 5".to_string(),
+                Expected::Integer64(5),
+                "!=".to_string(),
+                Expected::Integer64(5),
+            ),
+            InfixTestExpression::new(
+                "true != false".to_string(),
+                Expected::Bool(true),
+                "!=".to_string(),
+                Expected::Bool(false),
+            ),
+            InfixTestExpression::new(
+                "true == true".to_string(),
+                Expected::Bool(true),
+                "==".to_string(),
+                Expected::Bool(true),
+            ),
+            InfixTestExpression::new(
+                "false == false".to_string(),
+                Expected::Bool(false),
+                "==".to_string(),
+                Expected::Bool(false),
+            ),
         ];
 
         for test in infix_tests {
@@ -762,9 +913,9 @@ mod tests {
 
             test_infix_expression(
                 &statement.expression,
-                Expected::Integer64(test.left_value),
+                test.left_value,
                 test.operator.as_str(),
-                Expected::Integer64(test.right_value),
+                test.right_value,
             );
 
             // let expression = statement
@@ -847,6 +998,16 @@ mod tests {
             OperatorPrecedenceTest::new(
                 "3 + 4 * 5 == 3 * 1 + 4 * 5".to_string(),
                 "((3 + (4 * 5)) == ((3 * 1) + (4 * 5)))".to_string(),
+            ),
+            OperatorPrecedenceTest::new("true".to_string(), "true".to_string()),
+            OperatorPrecedenceTest::new("false".to_string(), "false".to_string()),
+            OperatorPrecedenceTest::new(
+                "3 < 5 == true".to_string(),
+                "((3 < 5) == true)".to_string(),
+            ),
+            OperatorPrecedenceTest::new(
+                "3 > 5 == false".to_string(),
+                "((3 > 5) == false)".to_string(),
             ),
         ];
 
