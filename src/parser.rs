@@ -1053,4 +1053,152 @@ mod tests {
             assert_eq!(actual, test.expected);
         }
     }
+
+    #[test]
+    fn test_if_expressions() {
+        let input = "if (x < y) { x }";
+        let lex = lexer::Lexer::new(input.to_string());
+        let mut parser = Parser::new(lex);
+
+        let program = match parser.parse_program() {
+            Some(p) => {
+                check_parser_errors(&parser);
+                p
+            }
+            None => {
+                panic!("Failed to call `parse_program`");
+            }
+        };
+
+        assert_eq!(program.statements.len(), 1);
+        let stmt = program.statements[0]
+            .as_any()
+            .downcast_ref::<ast::ExpressionStatement>()
+            .expect(
+                format!(
+                    "Failed to downcast_ref {:#?} to ExpressionStatement",
+                    program.statements[0]
+                )
+                .as_str(),
+            );
+
+        let expr = stmt
+            .as_any()
+            .downcast_ref::<ast::IfExpression>()
+            .expect(format!("Failed to downcast ref {:#?} to IfExpression", stmt).as_str());
+
+        if !test_infix_expression(
+            &expr.condition,
+            Expected::Identifier("x".to_string()),
+            "<",
+            Expected::Identifier("y".to_string()),
+        ) {
+            panic!("infix test failed");
+        };
+
+        let consequence = expr.consequence.statements[0]
+            .as_any()
+            .downcast_ref::<ast::ExpressionStatement>()
+            .expect(
+                format!(
+                    "failed to downcast_ref from {:#?} to ExpressionStatement",
+                    &expr.consequence.statements[0]
+                )
+                .as_str(),
+            );
+
+        if !test_identifier(&Box::new(&consequence.expression), "x") {
+            return;
+        }
+
+        if expr.alternative.is_some() {
+            panic!(
+                "exp.alternative.Statement was supposed to be None, got : {:#?}",
+                expr.alternative
+            );
+        }
+    }
+
+    #[test]
+    fn test_if_else_expressions() {
+        let input = "if (x < y) { x } else { y }";
+        let lex = lexer::Lexer::new(input.to_string());
+        let mut parser = Parser::new(lex);
+
+        let program = match parser.parse_program() {
+            Some(p) => {
+                check_parser_errors(&parser);
+                p
+            }
+            None => {
+                panic!("Failed to call `parse_program`");
+            }
+        };
+
+        assert_eq!(program.statements.len(), 1);
+        let stmt = program.statements[0]
+            .as_any()
+            .downcast_ref::<ast::ExpressionStatement>()
+            .expect(
+                format!(
+                    "Failed to downcast_ref {:#?} to ExpressionStatement",
+                    program.statements[0]
+                )
+                .as_str(),
+            );
+
+        let expr = stmt
+            .as_any()
+            .downcast_ref::<ast::IfExpression>()
+            .expect(format!("Failed to downcast ref {:#?} to IfExpression", stmt).as_str());
+
+        if !test_infix_expression(
+            &expr.condition,
+            Expected::Identifier("x".to_string()),
+            "<",
+            Expected::Identifier("y".to_string()),
+        ) {
+            panic!("infix test failed");
+        };
+
+        let consequence = expr.consequence.statements[0]
+            .as_any()
+            .downcast_ref::<ast::ExpressionStatement>()
+            .expect(
+                format!(
+                    "failed to downcast_ref from {:#?} to ExpressionStatement",
+                    &expr.consequence.statements[0]
+                )
+                .as_str(),
+            );
+
+        if !test_identifier(&Box::new(&consequence.expression), "x") {
+            return;
+        }
+
+        match &expr.alternative {
+            None => {
+                panic!(
+                    "exp.alternative.Statement was supposed to be Some, expr is : {:#?}",
+                    expr
+                )
+            }
+            Some(alt) => {
+                let alternative = alt.statements[0]
+                    .as_any()
+                    .downcast_ref::<ast::ExpressionStatement>()
+                    .expect(
+                        format!(
+                            "failed to downcast_ref from {:#?} to ExpressionStatement",
+                            &expr.consequence.statements[0]
+                        )
+                        .as_str(),
+                    );
+
+                if !test_identifier(&Box::new(&alternative.expression), "x") {
+                    return;
+                }
+            }
+        }
+    }
 }

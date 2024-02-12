@@ -362,6 +362,74 @@ impl Expression for Boolean {
         self
     }
 }
+
+#[derive(Debug)]
+pub struct BlockStatement {
+    pub token: Token,
+    pub statements: Vec<Box<dyn Statement>>,
+}
+
+impl Display for BlockStatement {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let mut temp = String::new();
+        for stmt in &self.statements {
+            temp.push_str(format!("{}", stmt).as_str())
+        }
+
+        write!(f, "{}", temp)
+    }
+}
+
+impl Node for BlockStatement {
+    fn token_literal(&self) -> String {
+        self.token.literal.clone()
+    }
+}
+
+impl Statement for BlockStatement {
+    fn statement_node(&self) {}
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+#[derive(Debug)]
+pub struct IfExpression {
+    pub token: Token,
+    pub condition: Box<dyn Expression>,
+    pub consequence: BlockStatement,
+    pub alternative: Option<BlockStatement>,
+}
+
+impl Display for IfExpression {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "if")?;
+        write!(f, "{}", self.condition)?;
+        write!(f, " ")?;
+        write!(f, "{}", self.consequence)?;
+        write!(f, "{}", self.consequence)?;
+
+        match &self.alternative {
+            Some(alt) => {
+                write!(f, "else")?;
+                write!(f, "{}", alt)
+            }
+            None => Ok(()),
+        }
+    }
+}
+impl Node for IfExpression {
+    fn token_literal(&self) -> String {
+        self.token.literal.clone()
+    }
+}
+
+impl Expression for IfExpression {
+    fn expression_node(&self) {}
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::token::Token;
