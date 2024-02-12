@@ -369,6 +369,12 @@ pub struct BlockStatement {
     pub statements: Vec<Box<dyn Statement>>,
 }
 
+impl BlockStatement {
+    pub fn new(token: Token, statements: Vec<Box<dyn Statement>>) -> Self {
+        Self { token, statements }
+    }
+}
+
 impl Display for BlockStatement {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let mut temp = String::new();
@@ -398,6 +404,22 @@ pub struct IfExpression {
     pub condition: Box<dyn Expression>,
     pub consequence: BlockStatement,
     pub alternative: Option<BlockStatement>,
+}
+
+impl IfExpression {
+    pub fn new(
+        token: Token,
+        condition: Box<dyn Expression>,
+        consequence: BlockStatement,
+        alternative: Option<BlockStatement>,
+    ) -> Self {
+        Self {
+            token,
+            condition,
+            consequence,
+            alternative,
+        }
+    }
 }
 
 impl Display for IfExpression {

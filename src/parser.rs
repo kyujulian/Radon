@@ -84,6 +84,10 @@ impl Parser {
             parser.parse_infix_expression(left)
         };
 
+        let parse_if_expression = |parser: &mut Parser| -> Option<Box<dyn ast::Expression>> {
+            parser.parse_if_expression()
+        };
+
         let parse_boolean =
             |parser: &mut Parser| -> Option<Box<dyn ast::Expression>> { parser.parse_boolean() };
 
@@ -110,13 +114,64 @@ impl Parser {
         p.register_prefix(TokenType::TRUE, parse_boolean);
         p.register_prefix(TokenType::FALSE, parse_boolean);
 
+        p.register_prefix(TokenType::IF, parse_if_expression);
+
         p.register_prefix(TokenType::LPAREN, parse_grouped_expression);
 
         p.next_token();
         p.next_token();
         p
     }
+    fn parse_if_expression(&mut self) -> Option<Box<dyn ast::Expression>> {
+        let start_token = self.cur_token.clone();
+        if !self.expect_peek(TokenType::LPAREN) {
+            return None;
+        }
 
+        self.next_token();
+
+        let condition = self.parse_expression(ExpressionPriorities::LOWEST)?;
+        if !self.expect_peek(TokenType::RPAREN) {
+            return None;
+        }
+
+        if !self.expect_peek(TokenType::LBRACE) {
+            return None;
+        }
+
+        let consequence = self.parse_block_statement()?;
+
+        let mut alternative = None;
+
+        if self.peek_token_is(TokenType::ELSE) {
+            self.next_token();
+            if !self.expect_peek(TokenType::LBRACE) {
+                return None;
+            }
+            alternative = self.parse_block_statement();
+        }
+
+        let expression = ast::IfExpression::new(start_token, condition, consequence, alternative);
+
+        Some(Box::new(expression))
+    }
+
+    fn parse_block_statement(&mut self) -> Option<ast::BlockStatement> {
+        let start_token = self.cur_token.clone();
+        // let mut block = ast::BlockStatement::new(self.cur_token.clone());
+        let mut statements = Vec::new();
+        self.next_token();
+
+        while !self.cur_token_is(TokenType::RBRACE) && !self.cur_token_is(TokenType::EOF) {
+            if let Some(stmt) = self.parse_statement() {
+                statements.push(stmt);
+            }
+            self.next_token();
+        }
+
+        let block = ast::BlockStatement::new(start_token, statements);
+        Some(block)
+    }
     fn parse_grouped_expression(&mut self) -> Option<Box<dyn ast::Expression>> {
         self.next_token();
         let exp = self.parse_expression(ExpressionPriorities::LOWEST);
@@ -1083,6 +1138,7 @@ mod tests {
             );
 
         let expr = stmt
+            .expression
             .as_any()
             .downcast_ref::<ast::IfExpression>()
             .expect(format!("Failed to downcast ref {:#?} to IfExpression", stmt).as_str());
@@ -1148,6 +1204,7 @@ mod tests {
             );
 
         let expr = stmt
+            .expression
             .as_any()
             .downcast_ref::<ast::IfExpression>()
             .expect(format!("Failed to downcast ref {:#?} to IfExpression", stmt).as_str());
@@ -1195,7 +1252,7 @@ mod tests {
                         .as_str(),
                     );
 
-                if !test_identifier(&Box::new(&alternative.expression), "x") {
+                if !test_identifier(&Box::new(&alternative.expression), "y") {
                     return;
                 }
             }
