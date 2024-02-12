@@ -1258,4 +1258,79 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn test_function_iteral_parsing() {
+        let input = "fn(x, y) { x + y; }";
+
+        let lex = lexer::Lexer::new(input.to_string());
+
+        let mut parser = Parser::new(lex);
+
+        let program = match parser.parse_program() {
+            Some(p) => {
+                check_parser_errors(&parser);
+                p
+            }
+            None => {
+                panic!("Failed to call `parser.parse_program() {:?}`", parser)
+            }
+        };
+
+        assert_eq!(program.statements.len(), 1);
+
+        let stmt = program.statements[0]
+            .as_any()
+            .downcast_ref::<ast::ExpressionStatement>()
+            .expect(
+                format!(
+                    "program.statements[0] is not ast::ExpressionStatements, got {:#?}",
+                    program.statements[0]
+                )
+                .as_str(),
+            );
+
+        let function = stmt
+            .expression
+            .as_any()
+            .downcast_ref::<ast::FunctionLiteral>()
+            .expect(
+                format!(
+                    "stmt.expression is not ast::FunctionLiteral, got {:#?}",
+                    stmt.expression
+                )
+                .as_str(),
+            );
+
+        assert_eq!(function.parameters.len(), 2);
+
+        test_literal_expression(
+            &function.parameters[0],
+            Expected::Identifier("x".to_string()),
+        );
+        test_literal_expression(
+            &function.parameters[1],
+            Expected::Identifier("y".to_string()),
+        );
+
+        assert_eq!(function.body.statements.len(), 1);
+
+        let body_statement = function.body.statements[0]
+            .as_any()
+            .downcast_ref::<ast::ExpressionStatement>()
+            .expect(
+                format!(
+                    "Function body not ast::ExpressionStatement, got= {:#?}",
+                    function.body.statements[0]
+                )
+                .as_str(),
+            );
+
+        test_infix_expression(
+            &body_statement.expression,
+            Expected::Identifier("x".to_string()),
+            "+",
+            Expected::Identifier("y".to_string()),
+        );
+    }
 }

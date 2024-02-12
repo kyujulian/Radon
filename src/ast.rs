@@ -452,6 +452,41 @@ impl Expression for IfExpression {
     }
 }
 
+#[derive(Debug)]
+pub struct FunctionLiteral {
+    pub token: Token,
+    pub parameters: Vec<Box<dyn Expression>>,
+    pub body: BlockStatement,
+}
+
+impl Display for FunctionLiteral {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let mut params = Vec::new();
+        for p in &self.parameters {
+            params.push(p.to_string());
+        }
+        write!(
+            f,
+            "{}({}) {}",
+            self.token_literal(),
+            params.join(", "),
+            self.body
+        )
+    }
+}
+impl Node for FunctionLiteral {
+    fn token_literal(&self) -> String {
+        self.token.literal.clone()
+    }
+}
+
+impl Expression for FunctionLiteral {
+    fn expression_node(&self) {}
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::token::Token;
