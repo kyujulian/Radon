@@ -88,6 +88,10 @@ impl Parser {
             parser.parse_if_expression()
         };
 
+        let parse_function_literal = |parser: &mut Parser| -> Option<Box<dyn ast::Expression>> {
+            parser.parse_function_literal()
+        };
+
         let parse_boolean =
             |parser: &mut Parser| -> Option<Box<dyn ast::Expression>> { parser.parse_boolean() };
 
@@ -97,10 +101,14 @@ impl Parser {
 
         p.register_prefix(TokenType::IDENT, parse_identifier);
         p.register_prefix(TokenType::INT, parse_integer_literal);
-
         p.register_prefix(TokenType::BANG, parse_prefix_expression);
         p.register_prefix(TokenType::MINUS, parse_prefix_expression);
+        p.register_prefix(TokenType::TRUE, parse_boolean);
+        p.register_prefix(TokenType::FALSE, parse_boolean);
+        p.register_prefix(TokenType::IF, parse_if_expression);
+        p.register_prefix(TokenType::LPAREN, parse_grouped_expression);
 
+        p.register_prefix(TokenType::FUNCTION, parse_function_literal);
         //Registring infix
         p.register_infix(TokenType::PLUS, parse_infix_expression);
         p.register_infix(TokenType::MINUS, parse_infix_expression);
@@ -111,16 +119,59 @@ impl Parser {
         p.register_infix(TokenType::LT, parse_infix_expression);
         p.register_infix(TokenType::GT, parse_infix_expression);
 
-        p.register_prefix(TokenType::TRUE, parse_boolean);
-        p.register_prefix(TokenType::FALSE, parse_boolean);
-
-        p.register_prefix(TokenType::IF, parse_if_expression);
-
-        p.register_prefix(TokenType::LPAREN, parse_grouped_expression);
-
         p.next_token();
         p.next_token();
         p
+    }
+
+    fn parse_function_literal(&mut self) -> Option<Box<dyn ast::Expression>> {
+        let start_token = self.cur_token.clone();
+
+        if !self.expect_peek(TokenType::LPAREN) {
+            return None;
+        }
+
+        let parameters = self.parse_function_parameters();
+
+        if !self.expect_peek(TokenType::LBRACE) {
+            return None;
+        }
+
+        let body = self.parse_block_statement();
+
+        let lit = ast::FunctionLiteral::new(start_token, parameters, body);
+
+        Some(Box::new(lit))
+    }
+
+    fn parse_function_parameters(&mut self) -> Vec<ast::Identifier> {
+        let mut identifiers = vec![];
+
+        if self.peek_token_is(TokenType::RPAREN) {
+            self.next_token();
+            return identifiers;
+        }
+
+        self.next_token();
+
+        let ident = ast::Identifier::new(self.cur_token.clone(), self.cur_token.clone().literal);
+
+        identifiers.push(ident);
+
+        while self.peek_token_is(TokenType::COMMA) {
+            self.next_token();
+            self.next_token();
+
+            let ident =
+                ast::Identifier::new(self.cur_token.clone(), self.cur_token.clone().literal);
+            identifiers.push(ident);
+        }
+
+        if !self.expect_peek(TokenType::RPAREN) {
+            return vec![];
+        }
+
+        identifiers
     }
     fn parse_if_expression(&mut self) -> Option<Box<dyn ast::Expression>> {
         let start_token = self.cur_token.clone();
@@ -422,8 +473,8 @@ impl Parser {
 mod tests {
     use std::any::Any;
 
+    use crate::ast::{Expression, Node, Statement};
     use crate::ast::{LetStatement, ReturnStatement};
-    use crate::ast::{Node, Statement};
     use crate::lexer::Lexer;
 
     use super::*;
@@ -1304,24 +1355,28 @@ mod tests {
 
         assert_eq!(function.parameters.len(), 2);
 
-        test_literal_expression(
-            &function.parameters[0],
-            Expected::Identifier("x".to_string()),
-        );
-        test_literal_expression(
-            &function.parameters[1],
-            Expected::Identifier("y".to_string()),
+        let expression_0: Box<dyn Expression> = Box::new(function.parameters[0].clone());
+        let expression_1: Box<dyn Expression> = Box::new(function.parameters[1].clone());
+        test_literal_expression(&expression_0, Expected::Identifier("x".to_string()));
+        test_literal_expression(&expression_1, Expected::Identifier("y".to_string()));
+
+        assert_eq!(
+            function
+                .body
+                .as_ref()
+                .expect("BODY IS NONE")
+                .statements
+                .len(),
+            1
         );
 
-        assert_eq!(function.body.statements.len(), 1);
-
-        let body_statement = function.body.statements[0]
+        let body_statement = function.body.as_ref().expect("BODY IS NONE").statements[0]
             .as_any()
             .downcast_ref::<ast::ExpressionStatement>()
             .expect(
                 format!(
                     "Function body not ast::ExpressionStatement, got= {:#?}",
-                    function.body.statements[0]
+                    function.body.as_ref().expect("BODY IS NONE").statements[0]
                 )
                 .as_str(),
             );
@@ -1332,5 +1387,73 @@ mod tests {
             "+",
             Expected::Identifier("y".to_string()),
         );
+    }
+    #[test]
+    fn test_function_parameter_parsing() {
+        struct Test {
+            input: String,
+            expected_params: Vec<String>,
+        };
+        impl Test {
+            fn new(input: &str, expected_params: Vec<String>) -> Self {
+                Self {
+                    input: input.to_string(),
+                    expected_params,
+                }
+            }
+        }
+
+        let tests: Vec<Test> = vec![
+            Test::new("fn() {};", vec![]),
+            Test::new("fn(x) {};", vec!["x".to_string()]),
+            Test::new(
+                "fn(x, y, z) {};",
+                vec!["x".to_string(), "y".to_string(), "z".to_string()],
+            ),
+        ];
+
+        for test in tests {
+            let lex = lexer::Lexer::new(test.input);
+            let mut parser = Parser::new(lex);
+
+            let program = match parser.parse_program() {
+                Some(p) => {
+                    check_parser_errors(&parser);
+
+                    p
+                }
+                None => panic!("Failed to call `self.parse_program()`"),
+            };
+
+            let stmt = program.statements[0]
+                .as_any()
+                .downcast_ref::<ast::ExpressionStatement>()
+                .expect(
+                    format!(
+                        "Failed to downcast_ref to ExpressionStatement from {:#?}",
+                        program.statements[0]
+                    )
+                    .as_str(),
+                );
+
+            let function = stmt
+                .expression
+                .as_any()
+                .downcast_ref::<ast::FunctionLiteral>()
+                .expect(
+                    format!(
+                        "Failed to downcast_ref to FunctionLiteral from {:#?}",
+                        stmt.expression
+                    )
+                    .as_str(),
+                );
+
+            assert_eq!(function.parameters.len(), test.expected_params.len());
+
+            for (i, ident) in test.expected_params.iter().enumerate() {
+                let expression: Box<dyn Expression> = Box::new(function.parameters[i].clone());
+                test_literal_expression(&expression, Expected::Identifier(ident.to_string()));
+            }
+        }
     }
 }

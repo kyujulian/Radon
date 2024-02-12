@@ -62,7 +62,7 @@ impl Node for Program {
 }
 
 // IDENTIFIER
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Identifier {
     pub token: Token,
     pub value: String,
@@ -455,8 +455,18 @@ impl Expression for IfExpression {
 #[derive(Debug)]
 pub struct FunctionLiteral {
     pub token: Token,
-    pub parameters: Vec<Box<dyn Expression>>,
-    pub body: BlockStatement,
+    pub parameters: Vec<Identifier>,
+    pub body: Option<BlockStatement>,
+}
+
+impl FunctionLiteral {
+    pub fn new(token: Token, parameters: Vec<Identifier>, body: Option<BlockStatement>) -> Self {
+        Self {
+            token,
+            parameters,
+            body,
+        }
+    }
 }
 
 impl Display for FunctionLiteral {
@@ -465,13 +475,12 @@ impl Display for FunctionLiteral {
         for p in &self.parameters {
             params.push(p.to_string());
         }
-        write!(
-            f,
-            "{}({}) {}",
-            self.token_literal(),
-            params.join(", "),
-            self.body
-        )
+
+        if let Some(b) = &self.body {
+            return write!(f, "{}({}) {}", self.token_literal(), params.join(", "), b);
+        }
+
+        return write!(f, "{}({}) {}", self.token_literal(), params.join(", "), "");
     }
 }
 impl Node for FunctionLiteral {
