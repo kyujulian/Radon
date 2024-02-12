@@ -87,6 +87,10 @@ impl Parser {
         let parse_boolean =
             |parser: &mut Parser| -> Option<Box<dyn ast::Expression>> { parser.parse_boolean() };
 
+        let parse_grouped_expression = |parser: &mut Parser| -> Option<Box<dyn ast::Expression>> {
+            parser.parse_grouped_expression()
+        };
+
         p.register_prefix(TokenType::IDENT, parse_identifier);
         p.register_prefix(TokenType::INT, parse_integer_literal);
 
@@ -106,11 +110,23 @@ impl Parser {
         p.register_prefix(TokenType::TRUE, parse_boolean);
         p.register_prefix(TokenType::FALSE, parse_boolean);
 
+        p.register_prefix(TokenType::LPAREN, parse_grouped_expression);
+
         p.next_token();
         p.next_token();
         p
     }
 
+    fn parse_grouped_expression(&mut self) -> Option<Box<dyn ast::Expression>> {
+        self.next_token();
+        let exp = self.parse_expression(ExpressionPriorities::LOWEST);
+
+        if !self.expect_peek(TokenType::RPAREN) {
+            return None;
+        }
+
+        exp
+    }
     fn parse_boolean(&self) -> Option<Box<dyn ast::Expression>> {
         let token = self.cur_token.clone();
         let value = self.cur_token_is(TokenType::TRUE);
@@ -1008,6 +1024,16 @@ mod tests {
             OperatorPrecedenceTest::new(
                 "3 > 5 == false".to_string(),
                 "((3 > 5) == false)".to_string(),
+            ),
+            OperatorPrecedenceTest::new(
+                "1 + (2 + 3) + 4".to_string(),
+                "((1 + (2 + 3)) + 4)".to_string(),
+            ),
+            OperatorPrecedenceTest::new("(5 + 5) * 2".to_string(), "((5 + 5) * 2)".to_string()),
+            OperatorPrecedenceTest::new("-(5 + 5)".to_string(), "(-(5 + 5))".to_string()),
+            OperatorPrecedenceTest::new(
+                "!(true == true)".to_string(),
+                "(!(true == true))".to_string(),
             ),
         ];
 
