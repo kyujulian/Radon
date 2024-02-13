@@ -99,6 +99,11 @@ impl Parser {
             parser.parse_grouped_expression()
         };
 
+        let parse_call_expression =
+            |parser: &mut Parser,
+             left: Box<dyn ast::Expression>|
+             -> Option<Box<dyn ast::Expression>> { parser.parse_call_expression(left) };
+
         p.register_prefix(TokenType::IDENT, parse_identifier);
         p.register_prefix(TokenType::INT, parse_integer_literal);
         p.register_prefix(TokenType::BANG, parse_prefix_expression);
@@ -118,12 +123,46 @@ impl Parser {
         p.register_infix(TokenType::NEQ, parse_infix_expression);
         p.register_infix(TokenType::LT, parse_infix_expression);
         p.register_infix(TokenType::GT, parse_infix_expression);
+        p.register_infix(TokenType::LPAREN, parse_call_expression);
 
         p.next_token();
         p.next_token();
         p
     }
 
+    fn parse_call_expression(
+        &mut self,
+        function: Box<dyn ast::Expression>,
+    ) -> Option<Box<dyn ast::Expression>> {
+        let start_token = self.cur_token.clone();
+        let args = self.parse_call_arguments()?;
+        let exp = ast::CallExpression::new(start_token, function, args);
+        return Some(Box::new(exp));
+    }
+
+    fn parse_call_arguments(&mut self) -> Option<Vec<Option<Box<dyn ast::Expression>>>> {
+        let mut args: Vec<Option<Box<dyn ast::Expression>>> = Vec::new();
+
+        if self.peek_token_is(TokenType::RPAREN) {
+            self.next_token();
+            return Some(args);
+        }
+
+        self.next_token();
+
+        args.push(self.parse_expression(ExpressionPriorities::LOWEST));
+
+        while self.peek_token_is(TokenType::COMMA) {
+            self.next_token();
+            self.next_token();
+            args.push(self.parse_expression(ExpressionPriorities::LOWEST));
+        }
+
+        if !self.expect_peek(TokenType::RPAREN) {
+            return None;
+        }
+        Some(args)
+    }
     fn parse_function_literal(&mut self) -> Option<Box<dyn ast::Expression>> {
         let start_token = self.cur_token.clone();
 
@@ -1141,6 +1180,14 @@ mod tests {
                 "!(true == true)".to_string(),
                 "(!(true == true))".to_string(),
             ),
+            OperatorPrecedenceTest::new(
+                "a + add(b * c) + d".to_string(),
+                "((a + add((b * c))) + d)".to_string(),
+            ),
+            OperatorPrecedenceTest::new(
+                "add(a, b, 1, 2 * 3, 4 + 5, add(6, 7 * 8))".to_string(),
+                "add(a, b, 1, (2 * 3), (4 + 5), add(6, (7 * 8)))".to_string(),
+            ),
         ];
 
         for test in tests {
@@ -1459,7 +1506,7 @@ mod tests {
 
     #[test]
     fn test_call_expression_parsing() {
-        let input = "add(1, 2 * 3, 4 + 5)";
+        let input = "add(1, 2 * 3, 4 + 5);";
         let lex = lexer::Lexer::new(input.to_string());
 
         let mut parser = Parser::new(lex);
@@ -1472,7 +1519,11 @@ mod tests {
             None => panic!("call to `self.parse_program()` failed"),
         };
 
-        assert_eq!(program.statements.len(), 1);
+        assert_eq!(
+            program.statements.len(),
+            1,
+            "program.statements has len != than 1"
+        );
 
         let stmt = program.statements[0]
             .as_any()
@@ -1486,6 +1537,7 @@ mod tests {
             );
 
         let expr = stmt
+            .expression
             .as_any()
             .downcast_ref::<ast::CallExpression>()
             .expect(format!("downcast_ref failed from {:#?} to CallExpression", stmt).as_str());
@@ -1493,18 +1545,18 @@ mod tests {
         assert!(test_identifier(&expr.function, "add"));
         assert_eq!(expr.arguments.len(), 3);
 
-        test_literal_expression(&expr.arguments[0], Expected::Integer(1));
+        test_literal_expression(&expr.arguments[0].as_ref().unwrap(), Expected::Integer(1));
         test_infix_expression(
-            &expr.arguments[1],
+            &expr.arguments[1].as_ref().unwrap(),
             Expected::Integer(2),
             "*",
-            Expected::Integer(1),
+            Expected::Integer(3),
         );
         test_infix_expression(
-            &expr.arguments[2],
+            &expr.arguments[2].as_ref().unwrap(),
             Expected::Integer(4),
             "+",
-            Expected::Integer(1),
+            Expected::Integer(5),
         );
     }
 }

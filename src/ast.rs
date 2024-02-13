@@ -500,14 +500,14 @@ impl Expression for FunctionLiteral {
 pub struct CallExpression {
     pub token: Token,
     pub function: Box<dyn Expression>,
-    pub arguments: Vec<Box<dyn Expression>>,
+    pub arguments: Vec<Option<Box<dyn Expression>>>,
 }
 
 impl CallExpression {
     pub fn new(
         token: Token,
         function: Box<dyn Expression>,
-        arguments: Vec<Box<dyn Expression>>,
+        arguments: Vec<Option<Box<dyn Expression>>>,
     ) -> Self {
         Self {
             token,
@@ -521,9 +521,14 @@ impl Display for CallExpression {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}", self.function)?;
         write!(f, "(")?;
+        let mut args: Vec<String> = Vec::new();
         for arg in &self.arguments {
-            write!(f, "{} ,", arg)?
+            if let Some(arg) = arg {
+                args.push(format!("{}", arg));
+            };
         }
+
+        write!(f, "{}", args.join(", "))?;
         write!(f, ")")
     }
 }
