@@ -47,6 +47,19 @@ lazy_static! {
     };
 }
 
+pub fn check_parser_errors(parser: &Parser) {
+    let errors = parser.errors();
+
+    if errors.len() == 0 {
+        return;
+    }
+
+    println!("Parser has {} Errors: ", errors.len());
+
+    for msg in errors {
+        println!("Parser error: {}", msg);
+    }
+}
 // Should I reach for thiserrror ?
 // Think not yet, will try do it by hand for now, to get a good
 // grasp on raw error handling and appreicate the value of thiserror
@@ -417,10 +430,13 @@ impl Parser {
     }
 
     pub fn parse_return_statement(&mut self) -> Option<Box<dyn ast::Statement>> {
-        let stmt = ast::ReturnStatement::new();
         self.next_token();
-        // TODO: We're skipping the expression, looping until we encounter a semicolon
-        while !self.cur_token_is(token::TokenType::SEMICOLON) {
+
+        let return_value = self.parse_expression(ExpressionPriorities::LOWEST);
+
+        let stmt = ast::ReturnStatement::new(return_value);
+
+        if self.peek_token_is(token::TokenType::SEMICOLON) {
             self.next_token();
         }
         return Some(Box::new(stmt));
@@ -428,23 +444,22 @@ impl Parser {
 
     pub fn parse_let_statement(&mut self) -> Option<Box<dyn ast::Statement>> {
         if !self.expect_peek(token::TokenType::IDENT) {
-            self.errors.push(format!(
-                "Expected next token to be of type IDENT, got {:?} instead",
-                self.peek_token.token_type
-            ));
+            //self.peek_error(token::TokenType::ASSIGN);
             return None;
         }
 
         let name = ast::Identifier::new(self.cur_token.clone(), self.cur_token.literal.clone());
-        let stmt = ast::LetStatement::new(name, None);
 
         if !self.expect_peek(token::TokenType::ASSIGN) {
-            self.peek_error(token::TokenType::ASSIGN);
+            //self.peek_error(token::TokenType::ASSIGN);
             return None;
         }
+        self.next_token();
 
-        //TODO: We're skipping the expressions until we encounter a semicolon
-        while !self.cur_token_is(token::TokenType::SEMICOLON) {
+        let value = self.parse_expression(ExpressionPriorities::LOWEST);
+        let stmt = ast::LetStatement::new(name, value);
+
+        if self.peek_token_is(token::TokenType::SEMICOLON) {
             self.next_token();
         }
 
@@ -518,53 +533,71 @@ mod tests {
 
     use super::*;
 
-    #[test]
-    fn test_let_statements() {
-        #[derive(Clone, Debug)]
-        struct TestIdentifier {
-            expected_identifier: String,
-        }
-        impl From<&str> for TestIdentifier {
-            fn from(s: &str) -> TestIdentifier {
-                TestIdentifier {
-                    expected_identifier: s.to_string(),
-                }
-            }
-        }
-
-        let input = "
-        let x = 5;
-        let y = 10;
-        let foobar = 838383;
-        ";
-
-        let lex = lexer::Lexer::new(input.to_string());
-        let mut parser = Parser::new(lex);
-
-        let program = match parser.parse_program() {
-            None => panic!("None from parse_program()"),
-            Some(p) => {
-                check_parser_errors(&parser);
-                p
-            }
-        };
-
-        let tests = vec![
-            TestIdentifier::from("x"),
-            TestIdentifier::from("y"),
-            TestIdentifier::from("foobar"),
-        ];
-
-        let has_invalid_tests = tests.iter().enumerate().any(|(i, test)| {
-            let stmt = &program.statements[i];
-            println!("stmt type {:?}", stmt.token_literal());
-            !test_let_statement(stmt, &test.expected_identifier)
-        });
-
-        assert!(!has_invalid_tests, "Invalid test found");
+    struct TestStatement<'a> {
+        input: &'a str,
+        expected_identifier: &'a str,
+        expected_value: Expected,
     }
 
-    fn test_let_statement(stmt: &Box<dyn ast::Statement>, name: &str) -> bool {
+    impl<'a> TestStatement<'a> {
+        pub fn new(input: &'a str, expected_identifier: &'a str, expected_value: Expected) -> Self {
+            Self {
+                input,
+                expected_identifier,
+                expected_value,
+            }
+        }
+    }
+
+    #[test]
+    fn test_let_statements() {
+        let tests = vec![
+            TestStatement::new("let x = 5;", "x", Expected::Integer(5)),
+            TestStatement::new("let y = true;", "y", Expected::Bool(true)),
+            TestStatement::new(
+                "let foobar = y;",
+                "foobar",
+                Expected::Identifier("y".to_string()),
+            ),
+        ];
+
+        for test in tests {
+            let input = test.input;
+            let lexer = lexer::Lexer::new(input.to_string());
+            let mut parser = Parser::new(lexer);
+
+            let program = match parser.parse_program() {
+                Some(p) => {
+                    check_parser_errors(&parser);
+                    p
+                }
+                None => panic!("Failed to call `parser.parse_program()`"),
+            };
+
+            assert_eq!(program.statements.len(), 1);
+
+            println!("{:#?}", program.statements[0]);
+
+            let stmt = program.statements[0]
+                .as_any()
+                .downcast_ref::<ast::LetStatement>()
+                .expect(" Failed to downcast_ref on stmt ");
+
+            assert!(test_let_statement(
+                &Box::new(stmt),
+                test.expected_identifier
+            ));
+
+            println!("{:#?}", stmt);
+            let ident = stmt.value.as_ref().expect("Value is None");
+
+            // println!("{:#?}", value);
+
+            assert!(test_literal_expression(&ident, test.expected_value))
+        }
+    }
+
+    fn test_let_statement(stmt: &Box<&ast::LetStatement>, name: &str) -> bool {
         if stmt.token_literal() != "let" {
             println!("Token literal not `let`, got={}", stmt.token_literal());
             return false;
@@ -598,7 +631,7 @@ mod tests {
         true
     }
 
-    fn check_parser_errors(parser: &Parser) {
+    pub fn check_parser_errors(parser: &Parser) {
         let errors = parser.errors();
 
         if errors.len() == 0 {
@@ -616,50 +649,80 @@ mod tests {
 
     // RETURN STATEMENTS
     #[test]
-    fn test_return_statement() {
-        let input = "
-            return 5;
-            return 10;
-            return 993322;
-        ";
+    fn test_return_statements() {
+        use TestStatement as TS;
+        let tests = vec![
+            TS::new("return 5;", "return", Expected::Integer(5)),
+            TS::new("return 10;", "return", Expected::Integer(10)),
+            TS::new("return 993322;", "return", Expected::Integer(993322)),
+        ];
+        // let input = "
+        //     return 5;
+        //     return 10;
+        //     return 993322;
+        // ";
 
-        let lex = lexer::Lexer::new(input.to_string());
+        for test in tests {
+            let input = test.input;
 
-        let mut parser = Parser::new(lex);
+            let lex = lexer::Lexer::new(input.to_string());
 
-        let program = match parser.parse_program() {
-            None => panic!("None from parse_program()"),
-            Some(p) => {
-                check_parser_errors(&parser);
-                p
+            let mut parser = Parser::new(lex);
+
+            let program = match parser.parse_program() {
+                None => panic!("None from parse_program()"),
+                Some(p) => {
+                    check_parser_errors(&parser);
+                    p
+                }
+            };
+
+            if program.statements.len() != 1 {
+                panic!(
+                    "Program statements does not contain 3 statements, got {}",
+                    program.statements.len()
+                );
             }
-        };
 
-        if program.statements.len() != 3 {
-            panic!(
-                "Program statements does not contain 3 statements, got {}",
-                program.statements.len()
-            );
+            let stmt = program.statements[0]
+                .as_any()
+                .downcast_ref::<ast::ReturnStatement>()
+                .expect("Failed to downcast_ref stmt to ReturnStatement");
+
+            assert!(test_return_statement(&Box::new(stmt), test.expected_value));
+            // assert!(test_return_statement());
+        }
+    }
+
+    fn test_return_statement(stmt: &Box<&ast::ReturnStatement>, expected: Expected) -> bool {
+        if stmt.token_literal() != "return" {
+            println!("Token literal not `let`, got={}", stmt.token_literal());
+            return false;
         }
 
-        for stmt in program.statements {
-            match stmt.as_any().downcast_ref::<ReturnStatement>() {
-                None => {
-                    panic!(
-                        "Got none from downcast_ref from  -> {:?}",
-                        stmt.token_literal()
-                    );
-                }
-                Some(st) => {
-                    if st.token_literal() != "return" {
-                        panic!(
-                            "Token Literal not corresponding to a return statement, got {:?}",
-                            stmt.token_literal()
-                        );
+        match stmt.as_any().downcast_ref::<ReturnStatement>() {
+            None => {
+                println!("stmt not ReturnStatement");
+                return false;
+            }
+            Some(return_stmt) => {
+                if let Some(exp_right_ref) = return_stmt.return_value.as_ref() {
+                    match expected {
+                        Expected::Integer(val) => {
+                            assert!(test_integer_literal(exp_right_ref, val as i64));
+                        }
+                        Expected::Integer64(val) => {
+                            assert!(test_integer_literal(exp_right_ref, val));
+                        }
+                        Expected::Bool(val) => {
+                            assert!(test_boolean_literal(exp_right_ref, val));
+                        }
+                        _ => panic!("Invalid test value"),
                     }
                 }
             }
         }
+        true
     }
 
     #[test]
@@ -953,7 +1016,7 @@ mod tests {
         let int_lit = il
             .as_any()
             .downcast_ref::<ast::IntegerLiteral>()
-            .expect(format!("Downcast_ref failed for {:?}", il).as_str());
+            .expect(format!("Downcast_ref failed for {:?} test_integer_literal", il).as_str());
 
         assert_eq!(int_lit.value, value);
 

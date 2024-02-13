@@ -143,11 +143,11 @@ impl LetStatement {
 
 #[derive(Debug)]
 pub struct ReturnStatement {
-    token: Token, // return token
+    pub token: Token, // return token
 
     // need to be wrapped in a box because the compiler isn't
     // capable of figuring out the size of a `dyn Expression` in compile time
-    return_value: Option<Box<dyn Expression>>,
+    pub return_value: Option<Box<dyn Expression>>,
 }
 
 impl Display for ReturnStatement {
@@ -161,7 +161,7 @@ impl Display for ReturnStatement {
 }
 
 impl ReturnStatement {
-    pub fn new() -> Self {
+    pub fn new(return_value: Option<Box<dyn Expression>>) -> Self {
         Self {
             token: Token::from("return"),
             return_value: None,
