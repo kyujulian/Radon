@@ -1456,4 +1456,55 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn test_call_expression_parsing() {
+        let input = "add(1, 2 * 3, 4 + 5)";
+        let lex = lexer::Lexer::new(input.to_string());
+
+        let mut parser = Parser::new(lex);
+
+        let program = match parser.parse_program() {
+            Some(p) => {
+                check_parser_errors(&parser);
+                p
+            }
+            None => panic!("call to `self.parse_program()` failed"),
+        };
+
+        assert_eq!(program.statements.len(), 1);
+
+        let stmt = program.statements[0]
+            .as_any()
+            .downcast_ref::<ast::ExpressionStatement>()
+            .expect(
+                format!(
+                    "downcast_ref failed from {:#?} to ExpressionStatement",
+                    program.statements[0]
+                )
+                .as_str(),
+            );
+
+        let expr = stmt
+            .as_any()
+            .downcast_ref::<ast::CallExpression>()
+            .expect(format!("downcast_ref failed from {:#?} to CallExpression", stmt).as_str());
+
+        assert!(test_identifier(&expr.function, "add"));
+        assert_eq!(expr.arguments.len(), 3);
+
+        test_literal_expression(&expr.arguments[0], Expected::Integer(1));
+        test_infix_expression(
+            &expr.arguments[1],
+            Expected::Integer(2),
+            "*",
+            Expected::Integer(1),
+        );
+        test_infix_expression(
+            &expr.arguments[2],
+            Expected::Integer(4),
+            "+",
+            Expected::Integer(1),
+        );
+    }
 }

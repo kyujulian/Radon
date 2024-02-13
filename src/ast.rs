@@ -496,6 +496,51 @@ impl Expression for FunctionLiteral {
     }
 }
 
+#[derive(Debug)]
+pub struct CallExpression {
+    pub token: Token,
+    pub function: Box<dyn Expression>,
+    pub arguments: Vec<Box<dyn Expression>>,
+}
+
+impl CallExpression {
+    pub fn new(
+        token: Token,
+        function: Box<dyn Expression>,
+        arguments: Vec<Box<dyn Expression>>,
+    ) -> Self {
+        Self {
+            token,
+            function,
+            arguments,
+        }
+    }
+}
+
+impl Display for CallExpression {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", self.function)?;
+        write!(f, "(")?;
+        for arg in &self.arguments {
+            write!(f, "{} ,", arg)?
+        }
+        write!(f, ")")
+    }
+}
+
+impl Node for CallExpression {
+    fn token_literal(&self) -> String {
+        self.token.literal.clone()
+    }
+}
+impl Expression for CallExpression {
+    fn expression_node(&self) {}
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::token::Token;
