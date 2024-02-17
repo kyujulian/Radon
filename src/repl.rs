@@ -1,10 +1,12 @@
 use crate::lexer::Lexer;
 use crate::parser;
-use crate::token::TokenType;
 use std::io::{self, Write};
 const PROMPT: &str = ">> ";
 
 pub fn start() {
+    println!("Radon Programming Language");
+    println!("Version 0.1.0");
+    println!("__________________________");
     loop {
         print!("{}", PROMPT);
         io::stdout().flush().unwrap();
@@ -27,13 +29,6 @@ pub fn start() {
             print_parser_errors(parser.errors());
         }
         println!("{}", program);
-        // loop {
-        //     let tok = lex.next_token();
-        //     if tok.token_type == TokenType::EOF {
-        //         break;
-        //     }
-        //     println!("{:?}", tok);
-        // }
 
         if input.trim() == "exit" {
             break;

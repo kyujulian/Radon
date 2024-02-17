@@ -2,7 +2,6 @@ use crate::ast::{self};
 use crate::lexer;
 use crate::token::{self, TokenType};
 use lazy_static::lazy_static;
-use std::any::TypeId;
 use std::collections::HashMap;
 
 //Type Aliases
